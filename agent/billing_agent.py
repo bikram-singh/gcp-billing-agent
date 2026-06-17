@@ -58,7 +58,7 @@ Always call tools one at a time. Never write code blocks.
 
 billing_agent = Agent(
     name="gcp_billing_agent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash-lite",
     instruction=AGENT_INSTRUCTION,
     tools=[
         FunctionTool(func=fetch_org_billing_summary),
