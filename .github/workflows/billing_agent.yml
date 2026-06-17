@@ -1,0 +1,108 @@
+name: GCP Billing Agent - Scheduled Report
+
+on:
+  # Daily run at 9:00 AM IST (3:30 AM UTC)
+  schedule:
+    - cron: "30 3 * * *"
+
+  # Monthly summary on 1st of each month at 9:00 AM IST
+  # (reuse same job with different input)
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: "Days to look back (default: 30)"
+        required: false
+        default: "30"
+      month:
+        description: "Target month YYYY-MM (optional)"
+        required: false
+        default: ""
+
+env:
+  GCP_PROJECT_ID:        ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION:            us-central1
+  BQ_BILLING_DATASET:    ${{ secrets.BQ_BILLING_DATASET }}
+  BQ_BILLING_TABLE:      ${{ secrets.BQ_BILLING_TABLE }}
+  GCP_ORG_ID:            ${{ secrets.GCP_ORG_ID }}
+  SLACK_BOT_TOKEN:       ${{ secrets.SLACK_BOT_TOKEN }}
+  SLACK_CHANNEL:         ${{ secrets.SLACK_CHANNEL }}
+  REPORTS_DIR:           /tmp/billing_reports
+
+  # Vertex AI - avoids WIF OAuth token conflicts (same as CloudSentinel)
+  GOOGLE_GENAI_USE_VERTEXAI: "TRUE"
+  GOOGLE_CLOUD_PROJECT:  ${{ secrets.GCP_PROJECT_ID }}
+  GOOGLE_CLOUD_LOCATION: us-central1
+
+jobs:
+  billing-report:
+    name: Run GCP Billing Agent
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write      # Required for WIF
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Authenticate to GCP via WIF ───────────────────────────────────────
+      - name: Authenticate to GCP (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER_NONPROD }}
+          service_account:            ${{ secrets.GCP_WIF_SERVICE_ACCOUNT_NONPROD }}
+          # token_format: access_token   # NOT needed - Vertex AI uses ADC automatically
+
+      # ── Setup Python ──────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── Install dependencies ──────────────────────────────────────────────
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── Create reports directory ──────────────────────────────────────────
+      - name: Create reports directory
+        run: mkdir -p /tmp/billing_reports
+
+      # ── Run Billing Agent ─────────────────────────────────────────────────
+      - name: Run GCP Billing Agent
+        run: |
+          DAYS_BACK="${{ github.event.inputs.days_back || '30' }}"
+          MONTH="${{ github.event.inputs.month || '' }}"
+
+          if [ -n "$MONTH" ]; then
+            python main.py --days-back "$DAYS_BACK" --month "$MONTH"
+          else
+            python main.py --days-back "$DAYS_BACK"
+          fi
+
+      # ── Upload reports as artifacts ───────────────────────────────────────
+      - name: Upload billing reports as GitHub artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: billing-reports-${{ github.run_id }}
+          path: /tmp/billing_reports/
+          retention-days: 90
+
+      # ── Notify on failure ─────────────────────────────────────────────────
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: ${{ secrets.SLACK_CHANNEL }}
+          slack-message: |
+            :x: *GCP Billing Agent FAILED*
+            Workflow: ${{ github.workflow }}
+            Run: ${{ github.run_id }}
+            Triggered by: ${{ github.event_name }}
+            See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
