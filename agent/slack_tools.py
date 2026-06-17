@@ -6,7 +6,6 @@ import os
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -16,7 +15,16 @@ SLACK_CHANNEL   = os.environ.get("SLACK_CHANNEL", "#gcp-billing-alerts")
 REPORTS_DIR     = Path(os.environ.get("REPORTS_DIR", "/tmp/billing_reports"))
 
 
-def _emoji_severity(critical: int, warning: int) -> str:
+def _parse(s):
+    if not s:
+        return None
+    try:
+        return json.loads(s) if isinstance(s, str) else s
+    except Exception:
+        return None
+
+
+def _emoji_severity(critical, warning):
     if critical > 0:
         return "🔴"
     if warning > 0:
@@ -25,72 +33,71 @@ def _emoji_severity(critical: int, warning: int) -> str:
 
 
 def send_slack_report(
-    org_summary:     dict | None = None,
-    anomaly_summary: dict | None = None,
-    top_drivers:     dict | None = None,
-    excel_filepath:  str  | None = None,
-    csv_filepath:    str  | None = None,
-) -> dict[str, Any]:
+    org_summary: str = "",
+    anomaly_summary: str = "",
+    top_drivers: str = "",
+    excel_filepath: str = "",
+    csv_filepath: str = "",
+) -> dict:
     """
     Send a structured Slack billing report with Excel and CSV file attachments.
 
     Args:
-        org_summary:     Output from fetch_org_billing_summary
-        anomaly_summary: Output from detect_billing_anomalies
-        top_drivers:     Output from fetch_top_cost_drivers
+        org_summary:     JSON string from fetch_org_billing_summary
+        anomaly_summary: JSON string from detect_billing_anomalies
+        top_drivers:     JSON string from fetch_top_cost_drivers
         excel_filepath:  Path to Excel report file
         csv_filepath:    Path to CSV report file
 
     Returns:
-        dict with 'success', 'message_ts', 'files_uploaded'
+        dict with success, message_ts, files_uploaded
     """
+    org     = _parse(org_summary)
+    anom    = _parse(anomaly_summary)
+    drivers = _parse(top_drivers)
+
     client = WebClient(token=SLACK_BOT_TOKEN)
     run_ts = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
 
-    # ── Determine severity emoji ───────────────────────────────────────────
-    critical = anomaly_summary.get("critical_count", 0) if anomaly_summary else 0
-    warning  = anomaly_summary.get("warning_count",  0) if anomaly_summary else 0
+    critical = anom.get("critical_count", 0) if anom else 0
+    warning  = anom.get("warning_count",  0) if anom else 0
     sev_emoji = _emoji_severity(critical, warning)
 
-    # ── Header block ──────────────────────────────────────────────────────
-    total_cost = f"{org_summary['currency']} {org_summary['total_cost']:,.2f}" if org_summary else "N/A"
+    total_cost = f"{org.get('currency')} {org.get('total_cost', 0):,.2f}" if org else "N/A"
     period     = (
-        f"{org_summary['period']['start']} → {org_summary['period']['end']}"
-        if org_summary else "N/A"
+        f"{org.get('period', {}).get('start')} → {org.get('period', {}).get('end')}"
+        if org else "N/A"
     )
-    proj_count = org_summary.get("project_count", 0) if org_summary else 0
+    proj_count = org.get("project_count", 0) if org else 0
 
     header_text = (
         f"{sev_emoji} *GCP Billing Report* | {run_ts}\n"
         f"*Period:* {period} | *Total Spend:* `{total_cost}` | *Projects:* {proj_count}"
     )
 
-    # ── Anomaly block ─────────────────────────────────────────────────────
     anomaly_lines = []
-    if anomaly_summary and anomaly_summary.get("anomalies"):
-        for a in anomaly_summary["anomalies"][:5]:  # top 5 in Slack
-            sev  = "🔴 CRITICAL" if a["pct_change"] >= 50 else "🟡 WARNING"
+    if anom and anom.get("anomalies"):
+        for a in anom["anomalies"][:5]:
+            sev  = "🔴 CRITICAL" if a.get("pct_change", 0) >= 50 else "🟡 WARNING"
             line = (
-                f"{sev} `{a['project_id']}` | {a['service']} | "
-                f"{a['usage_date']} | +{a['pct_change']}% "
-                f"(${a['daily_cost']:,.2f} vs avg ${a['avg_7d_cost']:,.2f})"
+                f"{sev} `{a.get('project_id')}` | {a.get('service')} | "
+                f"{a.get('usage_date')} | +{a.get('pct_change')}% "
+                f"(${a.get('daily_cost', 0):,.2f} vs avg ${a.get('avg_7d_cost', 0):,.2f})"
             )
             anomaly_lines.append(line)
-        if len(anomaly_summary["anomalies"]) > 5:
-            anomaly_lines.append(f"_...and {len(anomaly_summary['anomalies'])-5} more (see attached report)_")
+        if len(anom["anomalies"]) > 5:
+            anomaly_lines.append(f"_...and {len(anom['anomalies'])-5} more (see attached report)_")
     else:
         anomaly_lines.append("✅ No anomalies detected")
 
-    # ── Top drivers block ─────────────────────────────────────────────────
     driver_lines = []
-    if top_drivers and top_drivers.get("drivers"):
-        for i, d in enumerate(top_drivers["drivers"][:5], 1):
+    if drivers and drivers.get("drivers"):
+        for i, d in enumerate(drivers["drivers"][:5], 1):
             driver_lines.append(
-                f"{i}. `{d['project_name']}` | {d['service']} | "
-                f"*${d['total_cost']:,.2f}*"
+                f"{i}. `{d.get('project_name')}` | {d.get('service')} | "
+                f"*${d.get('total_cost', 0):,.2f}*"
             )
 
-    # ── Build Slack blocks ────────────────────────────────────────────────
     blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": "📊 GCP Organization Billing Report", "emoji": True}},
         {"type": "section", "text": {"type": "mrkdwn", "text": header_text}},
@@ -125,7 +132,6 @@ def send_slack_report(
         },
     ]
 
-    # ── Post message ──────────────────────────────────────────────────────
     try:
         msg_resp = client.chat_postMessage(
             channel=SLACK_CHANNEL,
@@ -136,14 +142,12 @@ def send_slack_report(
     except SlackApiError as e:
         return {"success": False, "error": str(e), "files_uploaded": []}
 
-    # ── Upload files as thread replies ────────────────────────────────────
     files_uploaded = []
     for fpath_str, ftype in [(excel_filepath, "xlsx"), (csv_filepath, "csv")]:
         if not fpath_str:
             continue
         fpath = Path(fpath_str)
         if not fpath.exists():
-            # Try resolving relative to REPORTS_DIR
             fpath = REPORTS_DIR / fpath.name
         if not fpath.exists():
             continue
