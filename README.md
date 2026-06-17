@@ -1,274 +1,516 @@
-# GCP Organization Billing Agent
+<div align="center">
 
-An AI agent built with **Google ADK + BigQuery + Vertex AI** that fetches your full GCP organization billing data, detects cost anomalies, generates Excel/CSV reports, and sends structured Slack alerts - scheduled daily via GitHub Actions.
+# 💰 GCP Billing Intelligence Agent
 
-Built on the same proven patterns as the CloudSentinel VM Inventory Agent (Vertex AI + WIF, no JSON keys).
+### AI-Powered Cost Monitoring · Google ADK · Vertex AI · BigQuery · Slack · GitHub Actions
 
----
-
-## Architecture
-
-```
-GitHub Actions (cron: daily 9 AM IST)
-        |
-        v
-  WIF Authentication
-  (github-actions-pool / bikram-singh-provider)
-        |
-        v
-  Google ADK Agent (Vertex AI / Gemini 2.0 Flash)
-        |
-   _____|______________________________
-  |           |           |            |
-  v           v           v            v
-BigQuery   BigQuery   Report Gen    Slack SDK
-Billing    Anomaly    (Excel/CSV)   (Message +
-Queries    Detection  openpyxl      File Upload)
-```
-
-**Key components:**
-
-- `agent/billing_agent.py` - ADK Agent definition + async runner
-- `agent/bigquery_tools.py` - 5 BigQuery tools (summary, detail, services, anomalies, top drivers)
-- `agent/report_tools.py` - Excel (multi-sheet, color-coded) + CSV generation
-- `agent/slack_tools.py` - Slack message blocks + file upload
-- `.github/workflows/billing_agent.yml` - Scheduled GitHub Actions workflow
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Google ADK](https://img.shields.io/badge/Google_ADK-Latest-4285F4?logo=google&logoColor=white)](https://google.github.io/adk-docs/)
+[![Vertex AI](https://img.shields.io/badge/Vertex_AI-Gemini_2.5_Flash_Lite-8E44AD?logo=google-cloud&logoColor=white)](https://cloud.google.com/vertex-ai)
+[![BigQuery](https://img.shields.io/badge/BigQuery-Billing_Export-34A853?logo=google-cloud&logoColor=white)](https://cloud.google.com/bigquery)
+[![Slack](https://img.shields.io/badge/Slack-Notifications-4A154B?logo=slack&logoColor=white)](https://slack.com)
+[![GitHub Actions](https://img.shields.io/badge/Scheduled-9:00_AM_IST_Daily-2088FF?logo=github-actions&logoColor=white)](https://github.com/bikram-singh/gcp-billing-agent/actions)
+[![WIF](https://img.shields.io/badge/Auth-Workload_Identity_Federation-FF6D00?logo=googlecloud&logoColor=white)](https://cloud.google.com/iam/docs/workload-identity-federation)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
 
-## Step-by-Step Setup Guide
+*An AI-powered GCP Organization Billing Intelligence Agent built with Google ADK and Vertex AI. Fetches billing data across all GCP projects, detects cost anomalies using 7-day rolling averages, generates color-coded Excel and CSV reports, and sends rich formatted alerts to Slack - triggered automatically every day at 9:00 AM IST via GitHub Actions. Zero stored credentials - powered by Workload Identity Federation.*
 
-### Step 1 - Enable GCP Billing Export to BigQuery
+</div>
 
-This is the data source for the entire agent. You must do this first and wait 24h for data to populate.
+---
 
-**1.1 Open GCP Console**
+## 📋 Table of Contents
+
+- [Overview](#-overview)
+- [Architecture](#-architecture)
+- [Agent Tools](#-agent-tools)
+- [Repository Structure](#-repository-structure)
+- [Prerequisites](#-prerequisites)
+- [BigQuery Billing Export Setup](#-bigquery-billing-export-setup)
+- [GitHub Actions Setup](#-github-actions-setup)
+- [Excel Report Structure](#-excel-report-structure)
+- [Anomaly Detection Logic](#-anomaly-detection-logic)
+- [Slack Notifications](#-slack-notifications)
+- [Scheduled Pipeline](#-scheduled-pipeline)
+- [Local Development - ADK Web UI](#-local-development---adk-web-ui)
+- [Snapshots](#-snapshots)
+- [Repository](#-repository)
+
+---
+
+## 🌐 Overview
+
+The **GCP Billing Intelligence Agent** is a fully automated cost monitoring solution for GCP organizations. It uses **Google ADK** with **Vertex AI** to intelligently orchestrate billing data collection, anomaly detection, report generation, and Slack alerting - all without any stored credentials.
+
+The pipeline runs automatically every day at **9:00 AM IST** via GitHub Actions - no manual trigger needed.
+
+### 🔑 Key Facts
+
+| Property | Value |
+|---|---|
+| 🤖 **Agent Framework** | Google Agent Development Kit (ADK) |
+| 🧠 **LLM** | Gemini 2.5 Flash Lite via **Vertex AI** |
+| ☁️ **Cloud Platform** | Google Cloud Platform |
+| 🔐 **Authentication** | Workload Identity Federation (WIF) - zero JSON keys |
+| 📊 **Data Source** | BigQuery Billing Export (`gcp_billing_export_v1`) |
+| 📢 **Notifications** | Slack (Block Kit rich messages + file attachments) |
+| 📁 **Output Format** | Excel (.xlsx) multi-sheet + CSV |
+| 🐍 **Language** | Python 3.11+ |
+| ⏰ **Scheduled Run** | GitHub Actions · Daily at 9:00 AM IST |
+| 🔄 **CI/CD** | `billing_agent.yml` · `main.py` |
+
+### ✨ What It Does
+
+| Capability | Description |
+|---|---|
+| 📊 **Org Billing Summary** | Fetches total spend across ALL GCP projects |
+| 📋 **Project Detail** | Day-by-day cost breakdown per project per service |
+| 🔍 **Service Breakdown** | Total costs grouped by GCP service |
+| 🚨 **Anomaly Detection** | Flags cost spikes vs 7-day rolling average |
+| 📈 **Top Cost Drivers** | Ranks top 10 project + service + SKU combinations |
+| 📊 **Excel Report** | 5-sheet color-coded report with critical/warning highlights |
+| 📄 **CSV Report** | Flat report with org summary, anomalies, top drivers |
+| 📣 **Slack Report** | Rich Block Kit message + Excel/CSV file attachments |
+| ⏰ **Auto Schedule** | GitHub Actions cron - runs daily at 9:00 AM IST |
+
+---
+
+## 🏛️ Architecture
 
 ```
-GCP Console → Billing → (select your billing account) → Billing Export
+GitHub Actions (cron: 9:00 AM IST daily)
+              │
+              ▼
+    WIF Authentication
+    (github-actions-pool / bikram-singh-provider)
+              │
+              ▼
+    Google ADK Agent
+    (Gemini 2.5 Flash Lite via Vertex AI)
+              │
+    __________|____________________________
+   |           |           |              |
+   ▼           ▼           ▼              ▼
+BigQuery    BigQuery    Report Gen     Slack SDK
+Billing     Anomaly     (Excel/CSV)    (Message +
+Queries     Detection   openpyxl       File Upload)
 ```
 
-**1.2 Enable Standard Usage Cost export**
+### 🔄 Layer Breakdown
 
-- Click **Edit Settings** under "Standard usage cost"
-- Select the GCP project where you want BigQuery data stored (use your agent's project)
-- Create or select a BigQuery dataset - name it `billing_export`
-- Click **Save**
+| Layer | Components |
+|---|---|
+| **Trigger Layer** | GitHub Actions Cron (9:00 AM IST) · Developer / ADK Web UI |
+| **Auth Layer** | Workload Identity Federation → OAuth token → Vertex AI + GCP APIs |
+| **AI Agent Layer** | ADK Root Agent (`billing_agent.py`) · Gemini 2.5 Flash Lite via Vertex AI |
+| **Data Layer** | BigQuery Billing Export · 5 Query Tools · Error Handling |
+| **Report Layer** | Excel (5 sheets, color-coded) · CSV (flat report) |
+| **Notification Layer** | Slack Block Kit messages · Excel + CSV file attachments |
 
-GCP will auto-create: `YOUR_PROJECT.billing_export.gcp_billing_export_v1`
-
-**1.3 (Optional) Enable for Organization**
-
-If you have a GCP Organization and want ALL project costs in one table:
+### 🔄 Full Pipeline Flow
 
 ```
-GCP Console → Billing → Billing Export
-→ Enable "Standard usage cost" at the Organization Billing Account level
+Step 1  fetch_org_billing_summary      →  Total spend across all projects
+Step 2  fetch_project_billing_detail   →  Day-by-day breakdown per project
+Step 3  fetch_service_cost_breakdown   →  Costs grouped by GCP service
+Step 4  detect_billing_anomalies       →  7-day rolling avg spike detection
+Step 5  fetch_top_cost_drivers         →  Top 10 project + service + SKU
+Step 6  generate_excel_report          →  5-sheet color-coded Excel file
+Step 7  generate_csv_report            →  Flat CSV report
+Step 8  send_slack_report              →  Rich Slack message + file uploads
 ```
 
-This exports data for every project under the org into the same table.
+---
 
-**1.4 Verify data is flowing (wait ~24 hours then run)**
+## 🛠️ Agent Tools
+
+The agent exposes **8 tools** that Gemini (via Vertex AI) orchestrates automatically:
+
+### 1️⃣ `fetch_org_billing_summary`
+Fetches total cost summary across ALL projects in the organization grouped by project for the last N days.
+
+### 2️⃣ `fetch_project_billing_detail`
+Fetches day-by-day cost breakdown per project, optionally filtered to a specific project ID.
+
+### 3️⃣ `fetch_service_cost_breakdown`
+Fetches total costs grouped by GCP service (Compute Engine, Cloud SQL, GKE, etc.) across all projects.
+
+### 4️⃣ `detect_billing_anomalies`
+Detects cost spikes using a 7-day rolling average comparison:
+
+| Severity | Condition |
+|---|---|
+| 🔴 **CRITICAL** | Daily cost > 50% above 7-day average |
+| 🟡 **WARNING** | Daily cost 20-50% above 7-day average |
+| ✅ **Normal** | Daily cost within 20% of 7-day average |
+
+### 5️⃣ `fetch_top_cost_drivers`
+Ranks the top N project + service + SKU combinations by total cost for the period.
+
+### 6️⃣ `generate_excel_report`
+Generates a multi-sheet color-coded Excel report with all billing data.
+
+### 7️⃣ `generate_csv_report`
+Generates a flat CSV report with org summary, anomalies, and top drivers.
+
+### 8️⃣ `send_slack_report`
+Sends a structured Slack Block Kit message and uploads Excel + CSV files as thread attachments.
+
+---
+
+## 📁 Repository Structure
+
+```
+gcp-billing-agent/
+│
+├── 📁 .github/
+│   └── 📁 workflows/
+│       └── 📄 billing_agent.yml        # GitHub Actions - 9:00 AM IST daily
+│
+├── 📁 agent/
+│   ├── 📄 __init__.py                  # ADK Web UI entry point (root_agent)
+│   ├── 📄 billing_agent.py             # ADK Agent definition + async runner
+│   ├── 📄 bigquery_tools.py            # 5 BigQuery tools with error handling
+│   ├── 📄 report_tools.py              # Excel + CSV report generation
+│   └── 📄 slack_tools.py               # Slack Block Kit + file upload
+│
+├── 📁 sql/
+│   └── 📄 billing_queries.sql          # Standalone SQL for manual testing
+│
+├── 📁 reports/                         # Local report output directory
+│
+├── 📄 main.py                          # CLI entry point (--days-back, --month)
+├── 📄 requirements.txt                 # Python dependencies
+├── 📄 .env.example                     # Environment variable template
+└── 📄 README.md                        # This file
+```
+
+---
+
+## ✅ Prerequisites
+
+| Requirement | Details |
+|---|---|
+| 🐍 **Python** | 3.11 or higher |
+| ☁️ **GCP Account** | With Billing Export enabled |
+| 🔐 **WIF Setup** | Workload Identity Federation configured |
+| 💬 **Slack Workspace** | With a Bot Token (`xoxb-...`) |
+| 📊 **BigQuery** | Billing Export dataset (`billing_export`) |
+
+### 🔌 GCP APIs Required
 
 ```bash
-bq query --use_legacy_sql=false '
-SELECT COUNT(*) as rows,
-       MIN(DATE(usage_start_time)) as earliest,
-       MAX(DATE(usage_start_time)) as latest
-FROM `YOUR_PROJECT.billing_export.gcp_billing_export_v1`'
-```
-
----
-
-### Step 2 - Enable Required GCP APIs
-
-```bash
-export PROJECT_ID="your-gcp-project-id"
-
-gcloud config set project $PROJECT_ID
-
 gcloud services enable \
   bigquery.googleapis.com \
   aiplatform.googleapis.com \
   iam.googleapis.com \
   iamcredentials.googleapis.com \
-  --project=$PROJECT_ID
+  --project=YOUR_PROJECT_ID
 ```
 
----
+### 🔐 IAM Roles Required for Service Account
 
-### Step 3 - IAM Permissions for Service Account
-
-Use your existing shared WIF service account (`github-actions-deploy@...`).
-
-**3.1 Grant BigQuery permissions**
-
-```bash
-SA="github-actions-deploy@dhg-vaccine-rateauto-nonpord.iam.gserviceaccount.com"
-PROJECT_ID="your-gcp-project-id"
-BILLING_PROJECT="project-where-billing-bq-lives"
-
-# BigQuery read access on the billing export dataset
-gcloud projects add-iam-policy-binding $BILLING_PROJECT \
-  --member="serviceAccount:$SA" \
-  --role="roles/bigquery.dataViewer"
-
-# BigQuery job runner (to execute queries)
-gcloud projects add-iam-policy-binding $BILLING_PROJECT \
-  --member="serviceAccount:$SA" \
-  --role="roles/bigquery.jobUser"
-
-# Vertex AI for ADK / Gemini inference
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SA" \
-  --role="roles/aiplatform.user"
-```
-
-**3.2 (Organization-level billing) Optional**
-
-If billing data spans a GCP Organization, you may need:
-
-```bash
-# At the organization level
-ORG_ID="123456789012"
-
-gcloud organizations add-iam-policy-binding $ORG_ID \
-  --member="serviceAccount:$SA" \
-  --role="roles/billing.viewer"
-```
-
----
-
-### Step 4 - Set Up Slack App
-
-**4.1 Create Slack App**
-
-- Go to https://api.slack.com/apps → **Create New App** → **From Scratch**
-- Name: `GCP Billing Agent`
-- Select your workspace
-
-**4.2 Add Bot Token Scopes**
-
-Under **OAuth & Permissions** → **Scopes** → **Bot Token Scopes**, add:
-
-```
-chat:write
-files:write
-channels:read
-```
-
-**4.3 Install App to Workspace**
-
-- Click **Install to Workspace** → **Allow**
-- Copy the **Bot User OAuth Token** (starts with `xoxb-...`)
-
-**4.4 Add bot to your Slack channel**
-
-In Slack, open your `#gcp-billing-alerts` channel:
-```
-/invite @GCP Billing Agent
-```
-
----
-
-### Step 5 - GitHub Repository Setup
-
-**5.1 Create the repository**
-
-```bash
-# Create repo (or use existing)
-gh repo create gcp-billing-agent --private --description "GCP Org Billing Agent - ADK + BigQuery"
-cd gcp-billing-agent
-
-# Copy all agent files from this guide
-# Push to main
-git add .
-git commit -m "feat: initial GCP billing agent setup"
-git push origin main
-```
-
-**5.2 Add GitHub Secrets**
-
-Go to your repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
-
-| Secret Name | Value |
+| Role | Purpose |
 |---|---|
-| `GCP_WIF_PROVIDER_NONPROD` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/providers/bikram-singh-provider` |
-| `GCP_WIF_SERVICE_ACCOUNT_NONPROD` | `github-actions-deploy@dhg-vaccine-rateauto-nonpord.iam.gserviceaccount.com` |
-| `GCP_PROJECT_ID` | Your GCP project ID |
+| `roles/bigquery.dataViewer` | Read billing export dataset |
+| `roles/bigquery.jobUser` | Run BigQuery query jobs |
+| `roles/aiplatform.user` | Call Vertex AI (Gemini) models |
+| `roles/billing.viewer` | View organization billing (optional) |
+| `roles/iam.workloadIdentityUser` | Allow WIF authentication |
+
+---
+
+## 📊 BigQuery Billing Export Setup
+
+### Step 1 - Enable Billing Export
+
+```
+GCP Console → Billing → Billing Export → BigQuery Export
+→ Standard usage cost → Edit Settings
+→ Project: your-gcp-project
+→ Dataset: billing_export
+→ Save
+```
+
+> ⚠️ **Important:** GCP auto-creates the dataset and table. Data takes **24-48 hours** to populate after enabling.
+
+### Step 2 - Verify Export is Active
+
+```bash
+bq ls --project_id=YOUR_PROJECT_ID
+
+# Expected output:
+#  datasetId
+#  ──────────────
+#  billing_export
+```
+
+### Step 3 - Verify Table Exists
+
+```bash
+bq query --use_legacy_sql=false \
+  'SELECT COUNT(*) as rows,
+          MIN(DATE(usage_start_time)) as earliest,
+          MAX(DATE(usage_start_time)) as latest
+   FROM `YOUR_PROJECT.billing_export.gcp_billing_export_v1`'
+```
+
+### Dataset Location
+
+> ⚠️ **Critical:** GCP Billing Export tables are always stored in **US multi-region**, NOT `us-central1`. The agent is configured with `location="US"` to handle this correctly.
+
+---
+
+## ⚙️ GitHub Actions Setup
+
+### 🔑 Required GitHub Secrets
+
+Go to repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**:
+
+| Secret | Value |
+|---|---|
+| `GCP_PROJECT_ID` | `your-gcp-project-id` |
+| `GCP_WIF_PROVIDER_NONPROD` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL/providers/PROVIDER` |
+| `GCP_WIF_SERVICE_ACCOUNT_NONPROD` | `github-actions-deploy@PROJECT.iam.gserviceaccount.com` |
 | `BQ_BILLING_DATASET` | `billing_export` |
 | `BQ_BILLING_TABLE` | `gcp_billing_export_v1` |
-| `GCP_ORG_ID` | Your org ID (optional) |
+| `GCP_ORG_ID` | `125899388883` |
 | `SLACK_BOT_TOKEN` | `xoxb-your-token` |
-| `SLACK_CHANNEL` | `#gcp-billing-alerts` |
+| `SLACK_CHANNEL_ID` | `C0XXXXXXXXX` |
 
-**5.3 Add WIF binding for the new repo**
+> **Note:** No `GOOGLE_API_KEY` needed - Vertex AI uses WIF OAuth token directly.
 
-If this is a new repo, add it to your WIF pool's attribute condition:
+### 🔗 WIF Binding for This Repo
+
+Run once in Cloud Shell to allow this repo to authenticate:
 
 ```bash
-# Check current attribute condition on your WIF provider
-gcloud iam workload-identity-pools providers describe bikram-singh-provider \
-  --workload-identity-pool=github-actions-pool \
-  --location=global \
-  --project=dhg-vaccine-rateauto-nonpord
+SA="github-actions-deploy@YOUR_PROJECT.iam.gserviceaccount.com"
 
-# Grant the new repo SA impersonation rights
-SA="github-actions-deploy@dhg-vaccine-rateauto-nonpord.iam.gserviceaccount.com"
-POOL_PROJECT="dhg-vaccine-rateauto-nonpord"
-POOL_NUMBER=$(gcloud projects describe $POOL_PROJECT --format='value(projectNumber)')
-GITHUB_ORG="bikram-singh"
-REPO="gcp-billing-agent"
+POOL_NUMBER=$(gcloud projects describe YOUR_PROJECT \
+  --format='value(projectNumber)')
 
 gcloud iam service-accounts add-iam-policy-binding $SA \
   --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/$POOL_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/$GITHUB_ORG/$REPO" \
-  --project=dhg-vaccine-rateauto-nonpord
+  --member="principalSet://iam.googleapis.com/projects/$POOL_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/bikram-singh/gcp-billing-agent" \
+  --project=YOUR_PROJECT
+```
+
+### 🔐 Auth Flow
+
+```
+GitHub Actions
+      ↓
+WIF OIDC token (auto-generated per run)
+      ↓
+GCP validates → issues OAuth token
+      ↓
+Works for ALL services:
+├── BigQuery API     ✅
+├── Vertex AI        ✅
+└── Cloud Billing    ✅
+```
+
+No JSON keys. No stored credentials. Tokens expire when the job ends.
+
+### ⚡ Manual Trigger
+
+```
+GitHub → Actions → GCP Billing Agent - Scheduled Report
+→ Run workflow
+→ days_back: 30 (default)
+→ month: 2025-06 (optional - for specific month report)
+→ Run workflow
 ```
 
 ---
 
-### Step 6 - Local Testing
+## 📊 Excel Report Structure
 
-**6.1 Create virtualenv and install deps**
+The generated Excel report contains **5 color-coded sheets**:
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+| Sheet | Contents | Color |
+|---|---|---|
+| **Executive Summary** | Period, total cost, project count, anomaly count, per-project table | Navy header |
+| **Project Detail** | Day-by-day cost per project per service | Navy header |
+| **Service Breakdown** | Total cost per GCP service across all projects | Blue header |
+| **Anomalies** | Color-coded critical/warning rows with % change vs 7-day avg | Red header |
+| **Top Cost Drivers** | Ranked project + service + SKU combinations | Blue header |
+
+### Color Coding in Anomalies Sheet
+
+| Color | Meaning |
+|---|---|
+| 🔴 Red row | CRITICAL - cost spike ≥ 50% above 7-day average |
+| 🟡 Orange row | WARNING - cost spike 20-49% above 7-day average |
+| ⬜ Alternating | Normal rows |
+
+---
+
+## 🔍 Anomaly Detection Logic
+
+The agent uses a **7-day rolling average** comparison per `(project, service)` pair:
+
+```sql
+pct_change = (today_cost - avg_7d_cost) / avg_7d_cost * 100
+
+CRITICAL: pct_change >= 50%   → Red in Excel, immediate Slack alert
+WARNING:  pct_change >= 20%   → Orange in Excel, informational
+Normal:   pct_change < 20%    → No flag
 ```
 
-**6.2 Set environment variables**
+### Why Per (Project, Service) Pair?
 
-```bash
-cp .env.example .env
-# Edit .env with your values
-export $(cat .env | xargs)
+A GKE spike in one project does not mask a Cloud SQL spike in another. Each project-service combination is evaluated independently against its own 7-day baseline.
+
+---
+
+## 📣 Slack Notifications
+
+```
+📊 GCP Organization Billing Report
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔴 GCP Billing Report | 2025-06-18 03:30 UTC
+Period: 2025-05-18 → 2025-06-18 | Total Spend: USD 12,847.33 | Projects: 8
+
+🚨 Anomaly Detection
+🔴 CRITICAL dhg-vaccine-rateauto-nonpord | Cloud SQL | 2025-06-17 | +87.3%
+            ($234.12 vs avg $125.00)
+🟡 WARNING  dhg-vaccine-rateauto-dev | GKE | 2025-06-16 | +31.2%
+            ($89.40 vs avg $68.14)
+
+💸 Top 5 Cost Drivers
+1. dhg-vaccine-rateauto-nonpord | Cloud SQL for PostgreSQL | $3,241.00
+2. dhg-vaccine-rateauto-nonpord | Kubernetes Engine        | $2,887.50
+3. dhg-vaccine-rateauto-dev     | Compute Engine           | $1,203.00
+4. dhg-vaccine-rateauto-nonpord | Cloud Storage            | $892.00
+5. dhg-vaccine-rateauto-dev     | Cloud SQL                | $654.00
+
+🤖 Generated by GCP Billing Agent | Reports attached below
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📎 billing_report_20250618.xlsx   [Excel Spreadsheet]
+📎 billing_report_20250618.csv    [CSV File]
 ```
 
-**6.3 Authenticate locally (use your personal ADC)**
+### Failure Notification
+
+```
+❌ GCP Billing Agent FAILED
+Workflow: GCP Billing Agent - Scheduled Report
+Run: 1234567890
+Triggered by: schedule
+See: https://github.com/bikram-singh/gcp-billing-agent/actions/runs/...
+```
+
+---
+
+## ⏰ Scheduled Pipeline
+
+### How It Works
+
+```
+GitHub Actions Cron (9:00 AM IST daily)
+         ↓
+main.py --days-back 30
+         ↓
+ADK Agent → Vertex AI (Gemini 2.5 Flash Lite)
+         ↓
+Gemini orchestrates all 8 tools:
+   Step 1 → fetch_org_billing_summary
+   Step 2 → fetch_project_billing_detail
+   Step 3 → fetch_service_cost_breakdown
+   Step 4 → detect_billing_anomalies
+   Step 5 → fetch_top_cost_drivers
+   Step 6 → generate_excel_report
+   Step 7 → generate_csv_report
+   Step 8 → send_slack_report
+         ↓
+Excel + CSV artifacts saved in GitHub Actions (90 days)
+Slack report delivered to #gcp-billing-alerts
+```
+
+### Schedule Configuration
+
+| Setting | Value |
+|---|---|
+| **IST Time** | 9:00 AM |
+| **UTC Time** | 3:30 AM |
+| **Cron** | `30 3 * * *` |
+| **Days** | Every day |
+| **Workflow file** | `.github/workflows/billing_agent.yml` |
+
+### Retry Logic
+
+The workflow includes automatic retry with 60-second delays for Vertex AI quota recovery:
+
+```yaml
+for attempt in 1 2 3; do
+  python main.py --days-back "$DAYS_BACK" && break
+  echo "Retrying in 60 seconds..."
+  sleep 60
+done
+```
+
+---
+
+## 💻 Local Development - ADK Web UI
+
+### Step 1 - Set Environment Variables (PowerShell)
+
+```powershell
+$env:GOOGLE_GENAI_USE_VERTEXAI = "TRUE"
+$env:GOOGLE_CLOUD_PROJECT = "your-gcp-project-id"
+$env:GOOGLE_CLOUD_LOCATION = "us-central1"
+$env:GCP_PROJECT_ID = "your-gcp-project-id"
+$env:BQ_BILLING_DATASET = "billing_export"
+$env:BQ_BILLING_TABLE = "gcp_billing_export_v1"
+$env:GCP_ORG_ID = "125899388883"
+$env:SLACK_BOT_TOKEN = "xoxb-your-token"
+$env:SLACK_CHANNEL = "C0XXXXXXXXX"
+$env:REPORTS_DIR = "D:\gcp-billing-agent\reports"
+```
+
+### Step 2 - Authenticate Locally
 
 ```bash
 gcloud auth application-default login
-# or if using a service account key for local dev only:
-export GOOGLE_APPLICATION_CREDENTIALS="/path/to/key.json"
 ```
 
-**6.4 Test BigQuery queries first**
+### Step 3 - Install Dependencies
 
 ```bash
-# Verify billing data is accessible
-bq query --use_legacy_sql=false --project_id=$GCP_PROJECT_ID \
-  "SELECT COUNT(*) FROM \`$GCP_PROJECT_ID.$BQ_BILLING_DATASET.$BQ_BILLING_TABLE\`"
+pip install -r requirements.txt
 ```
 
-**6.5 Run the agent**
+### Step 4 - Run ADK Web UI
 
 ```bash
-# Default: last 30 days
+# Run from the parent folder (contains agent/ directory)
+cd D:\gcp-billing-agent
+adk web
+```
+
+### Step 5 - Open Browser
+
+```
+http://localhost:8000
+```
+
+Select **agent** from the dropdown and type:
+
+```
+Run full billing analysis for last 30 days
+```
+
+### Step 6 - Run via CLI
+
+```bash
+# Last 30 days (default)
 python main.py
 
-# Custom: last 7 days
+# Last 7 days
 python main.py --days-back 7
 
 # Specific month
@@ -277,145 +519,102 @@ python main.py --month 2025-05
 
 ---
 
-### Step 7 - GitHub Actions Deployment
+## 🔧 Troubleshooting
 
-**7.1 The workflow runs automatically**
-
-The workflow file at `.github/workflows/billing_agent.yml` is configured with:
-
-```yaml
-schedule:
-  - cron: "30 3 * * *"   # Daily at 3:30 AM UTC = 9:00 AM IST
-```
-
-**7.2 Manual trigger**
+### Vertex AI 404 NOT_FOUND
 
 ```
-GitHub → Actions → GCP Billing Agent → Run workflow
+Model not found or project does not have access
 ```
 
-Optional inputs:
-- `days_back`: 30 (default) or any number
-- `month`: `2025-06` for a specific month report
+**Fix:** Ensure `GOOGLE_GENAI_USE_VERTEXAI=TRUE` is set BEFORE any ADK imports. Already handled in `main.py` and `billing_agent.py`.
 
-**7.3 Monitor runs**
+### BigQuery Table Not Found (us-central1)
 
 ```
-GitHub → Actions → GCP Billing Agent - Scheduled Report
+Not found: Table *** was not found in location us-central1
 ```
 
-Reports are uploaded as GitHub artifacts (retained 90 days) AND sent to Slack.
+**Fix:** Billing Export tables are always in **US multi-region**. The agent uses `location="US"` in the BigQuery client. Already fixed in `bigquery_tools.py`.
 
----
+### WIF Permission Denied
 
-### Step 8 - Validate the Slack Report
+New repo needs SA impersonation binding:
 
-After a successful run, your `#gcp-billing-alerts` channel should receive:
-
-```
-📊 GCP Organization Billing Report
-🔴 GCP Billing Report | 2025-06-14 03:30 UTC
-Period: 2025-05-14 → 2025-06-14 | Total Spend: USD 12,847.33 | Projects: 8
-
-🚨 Anomaly Detection
-🔴 CRITICAL dhg-vaccine-rateauto-nonpord | Cloud SQL | 2025-06-13 | +87.3% ($234.12 vs avg $125.00)
-🟡 WARNING  dhg-vaccine-rateauto-nonpord | GKE       | 2025-06-12 | +31.2% ($89.40 vs avg $68.14)
-
-💸 Top 5 Cost Drivers
-1. dhg-vaccine-rateauto-nonpord | Cloud SQL for PostgreSQL | $3,241.00
-2. dhg-vaccine-rateauto-nonpord | Kubernetes Engine        | $2,887.50
-3. dhg-vaccine-rateauto-dev     | Compute Engine           | $1,203.00
-```
-
-With `billing_report_20250614.xlsx` and `billing_report_20250614.csv` attached in thread.
-
----
-
-## Excel Report Structure
-
-| Sheet | Contents |
-|---|---|
-| **Executive Summary** | Period, total cost, project count, anomaly count, per-project table |
-| **Project Detail** | Day-by-day cost per project per service |
-| **Service Breakdown** | Total cost per GCP service across all projects |
-| **Anomalies** | Color-coded 🔴 critical / 🟡 warning rows with % change vs 7-day avg |
-| **Top Cost Drivers** | Ranked project+service+SKU combinations |
-
----
-
-## Anomaly Detection Logic
-
-The agent uses a **7-day rolling average** comparison:
-
-```
-pct_change = (today_cost - avg_7d_cost) / avg_7d_cost * 100
-
-CRITICAL: pct_change >= 50%   (red in Excel, immediate alert)
-WARNING:  pct_change >= 20%   (orange in Excel, informational)
-```
-
-Anomalies are detected per `(project, service)` pair, so a GKE spike in one project doesn't mask a Cloud SQL spike in another.
-
----
-
-## Cron Schedule Reference
-
-| Schedule | Cron | IST Time |
-|---|---|---|
-| Daily 9 AM IST | `30 3 * * *` | 09:00 AM |
-| Daily 6 AM IST | `30 0 * * *` | 06:00 AM |
-| Weekly Monday | `30 3 * * 1` | Mon 9 AM |
-| Monthly 1st | `30 3 1 * *` | 1st of month 9 AM |
-
----
-
-## Troubleshooting
-
-**401 errors from Vertex AI**
-
-Same issue as CloudSentinel - WIF OAuth tokens conflict with Gemini API key auth.
-
-Fix: Ensure `GOOGLE_GENAI_USE_VERTEXAI=TRUE` is set BEFORE any ADK imports. This is already handled in `main.py` and `billing_agent.py`.
-
-**No data in BigQuery**
-
-Billing export takes 24h to start. Check:
 ```bash
-bq ls --project_id=$GCP_PROJECT_ID billing_export
-bq show --project_id=$GCP_PROJECT_ID billing_export.gcp_billing_export_v1
+gcloud iam service-accounts add-iam-policy-binding $SA \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/$POOL_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/bikram-singh/gcp-billing-agent"
 ```
 
-**Slack file upload fails**
+### Slack File Upload Fails
 
-Ensure the bot is in the channel:
+Ensure the bot is invited to the channel:
+
 ```
-/invite @GCP Billing Agent
+/invite @GCP Billing Bot
 ```
+
 And `files:write` scope is added to the Slack App.
 
-**WIF permission denied**
+### No Billing Data Yet
 
-New repo needs SA impersonation binding (Step 5.3 above).
+Billing Export takes **24-48 hours** to populate after enabling. Verify:
+
+```bash
+bq query --use_legacy_sql=false \
+  'SELECT COUNT(*) FROM `YOUR_PROJECT.billing_export.gcp_billing_export_v1`'
+```
 
 ---
 
-## File Structure
+## 📸 Snapshots
 
-```
-gcp-billing-agent/
-- agent/
-  - billing_agent.py      # ADK Agent + async runner
-  - bigquery_tools.py     # 5 BigQuery ADK tools
-  - report_tools.py       # Excel + CSV generation
-  - slack_tools.py        # Slack message + file upload
-  - __init__.py
-- sql/
-  - billing_queries.sql   # Standalone SQL for manual testing
-- .github/
-  - workflows/
-    - billing_agent.yml   # Scheduled GitHub Actions
-- main.py                 # Entry point (argparse)
-- requirements.txt
-- .env.example
-- README.md
-```
+### 1️⃣ ADK Web UI - Agent Running
+![ADK Web UI](docs/snapshots/1_adk_web_ui.png)
+
+---
+
+### 2️⃣ Full Pipeline Execution - All 8 Tools Chained
+![Full Pipeline](docs/snapshots/2_full_pipeline_execution.png)
+
+---
+
+### 3️⃣ BigQuery Billing Export Table
+![BigQuery Table](docs/snapshots/3_bigquery_table.png)
+
+---
+
+### 4️⃣ Slack Notification - Rich Block Kit Report + Excel/CSV Attachments
+![Slack Notification](docs/snapshots/4_slack_notification.png)
+
+---
+
+### 5️⃣ GitHub Actions - Daily Scheduled Run
+![GitHub Actions](docs/snapshots/5_github_actions_scheduled_run.png)
+
+---
+
+### 6️⃣ Excel Report - 5 Color-Coded Sheets
+![Excel Report](docs/snapshots/6_excel_report.png)
+
+---
+
+## 🔗 Repository
+
+| Repository | Purpose |
+|---|---|
+| [`gcp-billing-agent`](https://github.com/bikram-singh/gcp-billing-agent) | GCP Billing Intelligence Agent · ADK · Vertex AI · BigQuery · Slack |
+| [`gcp-inventory-agent-vertexai`](https://github.com/bikram-singh/gcp-inventory-agent-vertexai) | GCP VM Inventory Agent · Vertex AI · WIF · GitHub Actions |
+
+---
+
+<div align="center">
+
+**Maintained by Bikram Singh**
+
+`dhg-vaccine-rateauto-nonpord` · `gcpcloudhub.shop` · `us-central1` · Google Cloud Platform
+
+*Built with Google ADK · Vertex AI · BigQuery · Slack · GitHub Actions*
+
+</div>
