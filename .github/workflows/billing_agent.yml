@@ -25,7 +25,7 @@ env:
   BQ_BILLING_TABLE:      ${{ secrets.BQ_BILLING_TABLE }}
   GCP_ORG_ID:            ${{ secrets.GCP_ORG_ID }}
   SLACK_BOT_TOKEN:       ${{ secrets.SLACK_BOT_TOKEN }}
-  SLACK_CHANNEL:         ${{ secrets.SLACK_CHANNEL }}
+  SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID }}
   REPORTS_DIR:           /tmp/billing_reports
 
   # Vertex AI - avoids WIF OAuth token conflicts (same as CloudSentinel)

@@ -56,7 +56,7 @@ When running:
 
 billing_agent = Agent(
     name="gcp_billing_agent",
-    model="gemini-2.0-flash",
+    model="gemini-1.5-flash",
     instruction=AGENT_INSTRUCTION,
     tools=[
         FunctionTool(func=fetch_org_billing_summary),
