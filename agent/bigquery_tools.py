@@ -5,7 +5,7 @@ Queries the GCP Billing Export table in BigQuery
 
 import os
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 from google.cloud import bigquery
 
 # BigQuery config - set via environment variables
@@ -17,7 +17,7 @@ ORG_ID        = os.environ.get("GCP_ORG_ID", "")
 # GCP Billing Export tables are always stored in US multi-region
 BQ_LOCATION   = "US"
 
-_client: bigquery.Client | None = None
+_client: Optional[bigquery.Client] = None
 
 
 def _bq() -> bigquery.Client:
@@ -30,7 +30,7 @@ def _bq() -> bigquery.Client:
     return _client
 
 
-def _date_range(days_back: int) -> tuple[str, str]:
+def _date_range(days_back: int) -> tuple:
     end   = datetime.utcnow().date()
     start = end - timedelta(days=days_back)
     return str(start), str(end)
@@ -40,7 +40,7 @@ def _date_range(days_back: int) -> tuple[str, str]:
 # Tool 1: Organization billing summary
 # ---------------------------------------------------------------------------
 
-def fetch_org_billing_summary(days_back: int = 30) -> dict[str, Any]:
+def fetch_org_billing_summary(days_back: int = 30) -> dict:
     """
     Fetch total cost summary across ALL projects in the organization
     grouped by project, for the last N days.
@@ -49,7 +49,7 @@ def fetch_org_billing_summary(days_back: int = 30) -> dict[str, Any]:
         days_back: Number of days to look back from today
 
     Returns:
-        dict with 'total_cost', 'currency', 'period', 'projects' list
+        dict with total_cost, currency, period, projects list
     """
     start, end = _date_range(days_back)
     query = f"""
@@ -72,12 +72,12 @@ def fetch_org_billing_summary(days_back: int = 30) -> dict[str, Any]:
         currency = projects[0]["currency"] if projects else "USD"
     except Exception as e:
         return {
-            "total_cost": 0,
-            "currency":   "USD",
-            "period":     {"start": start, "end": end},
-            "projects":   [],
+            "total_cost":    0,
+            "currency":      "USD",
+            "period":        {"start": start, "end": end},
+            "projects":      [],
             "project_count": 0,
-            "error": str(e),
+            "error":         str(e),
         }
 
     return {
@@ -95,17 +95,17 @@ def fetch_org_billing_summary(days_back: int = 30) -> dict[str, Any]:
 
 def fetch_project_billing_detail(
     days_back: int = 30,
-    project_id: str | None = None,
-) -> dict[str, Any]:
+    project_id: str = "",
+) -> dict:
     """
-    Fetch day-by-day cost breakdown per project (optionally filtered to one project).
+    Fetch day-by-day cost breakdown per project, optionally filtered to one project.
 
     Args:
         days_back:  Number of days to look back
-        project_id: Optional GCP project ID to filter
+        project_id: Optional GCP project ID to filter (leave empty for all projects)
 
     Returns:
-        dict with 'rows' list of daily cost records
+        dict with rows list of daily cost records
     """
     start, end = _date_range(days_back)
     project_filter = f"AND project.id = '{project_id}'" if project_id else ""
@@ -134,7 +134,7 @@ def fetch_project_billing_detail(
 # Tool 3: Service-level cost breakdown
 # ---------------------------------------------------------------------------
 
-def fetch_service_cost_breakdown(days_back: int = 30) -> dict[str, Any]:
+def fetch_service_cost_breakdown(days_back: int = 30) -> dict:
     """
     Fetch total costs grouped by GCP service across all projects.
 
@@ -142,7 +142,7 @@ def fetch_service_cost_breakdown(days_back: int = 30) -> dict[str, Any]:
         days_back: Number of days to look back
 
     Returns:
-        dict with 'services' list sorted by cost descending
+        dict with services list sorted by cost descending
     """
     start, end = _date_range(days_back)
     query = f"""
@@ -171,17 +171,16 @@ def fetch_service_cost_breakdown(days_back: int = 30) -> dict[str, Any]:
 def detect_billing_anomalies(
     threshold_pct: float = 20.0,
     days_back: int = 30,
-) -> dict[str, Any]:
+) -> dict:
     """
-    Detect billing anomalies: projects/services where cost spiked by more than
-    threshold_pct% vs the prior 7-day average.
+    Detect billing anomalies where cost spiked more than threshold_pct vs 7-day average.
 
     Args:
-        threshold_pct: Percentage increase that flags an anomaly (default 20%)
+        threshold_pct: Percentage increase that flags an anomaly (default 20)
         days_back:     Window to scan for anomalies
 
     Returns:
-        dict with 'anomalies' list and 'summary'
+        dict with anomalies list and summary
     """
     start, end = _date_range(days_back)
     query = f"""
@@ -232,10 +231,14 @@ def detect_billing_anomalies(
         rows = [dict(r) for r in _bq().query(query).result()]
     except Exception as e:
         return {
-            "anomalies": [], "anomaly_count": 0, "critical_count": 0,
-            "warning_count": 0, "threshold_pct": threshold_pct,
-            "period": {"start": start, "end": end},
-            "summary": "Anomaly detection failed", "error": str(e),
+            "anomalies":      [],
+            "anomaly_count":  0,
+            "critical_count": 0,
+            "warning_count":  0,
+            "threshold_pct":  threshold_pct,
+            "period":         {"start": start, "end": end},
+            "summary":        "Anomaly detection failed",
+            "error":          str(e),
         }
 
     critical = [r for r in rows if r.get("pct_change", 0) >= 50]
@@ -262,7 +265,7 @@ def detect_billing_anomalies(
 def fetch_top_cost_drivers(
     days_back: int = 30,
     top_n: int = 10,
-) -> dict[str, Any]:
+) -> dict:
     """
     Fetch top N cost drivers (project + service combinations) for the period.
 
@@ -271,7 +274,7 @@ def fetch_top_cost_drivers(
         top_n:     Number of top drivers to return (default 10)
 
     Returns:
-        dict with 'drivers' list
+        dict with drivers list
     """
     start, end = _date_range(days_back)
     query = f"""
