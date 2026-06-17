@@ -5,8 +5,6 @@ on:
   schedule:
     - cron: "30 3 * * *"
 
-  # Monthly summary on 1st of each month at 9:00 AM IST
-  # (reuse same job with different input)
   workflow_dispatch:
     inputs:
       days_back:
@@ -25,7 +23,7 @@ env:
   BQ_BILLING_TABLE:      ${{ secrets.BQ_BILLING_TABLE }}
   GCP_ORG_ID:            ${{ secrets.GCP_ORG_ID }}
   SLACK_BOT_TOKEN:       ${{ secrets.SLACK_BOT_TOKEN }}
-  SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL_ID }}
+  SLACK_CHANNEL:         ${{ secrets.SLACK_CHANNEL_ID }}
   REPORTS_DIR:           /tmp/billing_reports
 
   # Vertex AI - avoids WIF OAuth token conflicts (same as CloudSentinel)
@@ -52,7 +50,6 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER_NONPROD }}
           service_account:            ${{ secrets.GCP_WIF_SERVICE_ACCOUNT_NONPROD }}
-          # token_format: access_token   # NOT needed - Vertex AI uses ADC automatically
 
       # ── Setup Python ──────────────────────────────────────────────────────
       - name: Set up Python 3.11
@@ -97,7 +94,7 @@ jobs:
         if: failure()
         uses: slackapi/slack-github-action@v1.26.0
         with:
-          channel-id: ${{ secrets.SLACK_CHANNEL }}
+          channel-id: ${{ secrets.SLACK_CHANNEL_ID }}
           slack-message: |
             :x: *GCP Billing Agent FAILED*
             Workflow: ${{ github.workflow }}
