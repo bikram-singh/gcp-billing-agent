@@ -4,6 +4,7 @@ Fetches billing reports, detects anomalies, sends Slack reports with Excel/CSV a
 """
 
 import os
+import json
 import asyncio
 from datetime import datetime
 from typing import Optional
@@ -38,21 +39,27 @@ from agent.slack_tools import send_slack_report
 # ---------------------------------------------------------------------------
 
 AGENT_INSTRUCTION = """
-You are a GCP Billing Intelligence Agent. Use your available tools directly.
+You are a GCP Billing Intelligence Agent. You MUST call ALL 8 tools in strict order.
+Do NOT stop after fetching data. Do NOT summarize early. Do NOT skip any step.
 
-DO NOT write Python code. DO NOT use import statements.
-Call tools directly in sequence:
+MANDATORY SEQUENCE - complete ALL 8 steps without stopping:
 
-1. Call fetch_org_billing_summary with days_back
-2. Call fetch_project_billing_detail with days_back
-3. Call fetch_service_cost_breakdown with days_back
-4. Call detect_billing_anomalies with threshold_pct=20 and days_back
-5. Call fetch_top_cost_drivers with days_back and top_n=10
-6. Call generate_excel_report with filename and JSON strings from previous results
-7. Call generate_csv_report with filename and JSON strings from previous results
-8. Call send_slack_report with JSON strings and file paths from steps 6 and 7
+STEP 1: Call fetch_org_billing_summary with days_back
+STEP 2: Call fetch_project_billing_detail with days_back
+STEP 3: Call fetch_service_cost_breakdown with days_back
+STEP 4: Call detect_billing_anomalies with threshold_pct=20 and days_back
+STEP 5: Call fetch_top_cost_drivers with days_back and top_n=10
+STEP 6: Call generate_excel_report with filename and all previous results as JSON strings
+STEP 7: Call generate_csv_report with filename and results as JSON strings
+STEP 8: Call send_slack_report with all JSON strings and filepaths from steps 6 and 7
 
-Always call tools one at a time. Never write code blocks.
+RULES:
+- You MUST call generate_excel_report after step 5. This is mandatory.
+- You MUST call generate_csv_report after step 6. This is mandatory.
+- You MUST call send_slack_report after step 7. This is mandatory.
+- Do NOT write Python code or import statements.
+- Call tools one at a time only.
+- After ALL 8 steps are complete, provide a brief summary.
 """
 
 billing_agent = Agent(
@@ -94,21 +101,39 @@ async def run_billing_agent(days_back: int = 30, report_month: Optional[str] = N
         user_id="github-actions",
     )
 
+    today = datetime.now().strftime('%Y%m%d')
     period_str = report_month if report_month else f"last {days_back} days"
+
     prompt = f"""
     Run a full GCP billing analysis for the {period_str}.
 
-    Steps:
-    1. Fetch organization billing summary (days_back={days_back})
-    2. Fetch per-project billing detail (days_back={days_back})
-    3. Fetch service-level cost breakdown (days_back={days_back})
-    4. Detect billing anomalies (threshold_pct=20, days_back={days_back})
-    5. Fetch top 10 cost drivers (days_back={days_back})
-    6. Generate Excel report with all data (filename="billing_report_{datetime.now().strftime('%Y%m%d')}.xlsx")
-    7. Generate CSV report (filename="billing_report_{datetime.now().strftime('%Y%m%d')}.csv")
-    8. Send Slack report with summary, anomalies, and attach both files
+    You MUST complete ALL 8 steps below in order. Do not stop early.
 
-    Be thorough and include all findings in the Slack message.
+    STEP 1: Call fetch_org_billing_summary with days_back={days_back}
+    STEP 2: Call fetch_project_billing_detail with days_back={days_back}
+    STEP 3: Call fetch_service_cost_breakdown with days_back={days_back}
+    STEP 4: Call detect_billing_anomalies with threshold_pct=20, days_back={days_back}
+    STEP 5: Call fetch_top_cost_drivers with days_back={days_back}, top_n=10
+    STEP 6: Call generate_excel_report with:
+            - filename="billing_report_{today}.xlsx"
+            - org_summary=<JSON string from step 1>
+            - project_detail=<JSON string from step 2>
+            - service_breakdown=<JSON string from step 3>
+            - anomalies=<JSON string from step 4>
+            - top_drivers=<JSON string from step 5>
+    STEP 7: Call generate_csv_report with:
+            - filename="billing_report_{today}.csv"
+            - org_summary=<JSON string from step 1>
+            - anomalies=<JSON string from step 4>
+            - top_drivers=<JSON string from step 5>
+    STEP 8: Call send_slack_report with:
+            - org_summary=<JSON string from step 1>
+            - anomaly_summary=<JSON string from step 4>
+            - top_drivers=<JSON string from step 5>
+            - excel_filepath=<filepath from step 6>
+            - csv_filepath=<filepath from step 7>
+
+    All 8 steps are MANDATORY. Complete every step before finishing.
     """
 
     content = genai_types.Content(
