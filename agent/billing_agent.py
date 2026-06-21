@@ -4,7 +4,6 @@ Fetches billing reports, detects anomalies, sends Slack reports with Excel/CSV a
 """
 
 import os
-import json
 import asyncio
 from datetime import datetime
 from typing import Optional
@@ -39,27 +38,22 @@ from agent.slack_tools import send_slack_report
 # ---------------------------------------------------------------------------
 
 AGENT_INSTRUCTION = """
-You are a GCP Billing Intelligence Agent. You MUST call ALL 8 tools in strict order.
-Do NOT stop after fetching data. Do NOT summarize early. Do NOT skip any step.
+You are a GCP Billing Intelligence Agent.
+You have 8 tools. Call them ALL in this exact order. Never stop early.
 
-MANDATORY SEQUENCE - complete ALL 8 steps without stopping:
+1. fetch_org_billing_summary
+2. fetch_project_billing_detail
+3. fetch_service_cost_breakdown
+4. detect_billing_anomalies
+5. fetch_top_cost_drivers
+6. generate_excel_report
+7. generate_csv_report
+8. send_slack_report
 
-STEP 1: Call fetch_org_billing_summary with days_back
-STEP 2: Call fetch_project_billing_detail with days_back
-STEP 3: Call fetch_service_cost_breakdown with days_back
-STEP 4: Call detect_billing_anomalies with threshold_pct=20 and days_back
-STEP 5: Call fetch_top_cost_drivers with days_back and top_n=10
-STEP 6: Call generate_excel_report with filename and all previous results as JSON strings
-STEP 7: Call generate_csv_report with filename and results as JSON strings
-STEP 8: Call send_slack_report with all JSON strings and filepaths from steps 6 and 7
-
-RULES:
-- You MUST call generate_excel_report after step 5. This is mandatory.
-- You MUST call generate_csv_report after step 6. This is mandatory.
-- You MUST call send_slack_report after step 7. This is mandatory.
-- Do NOT write Python code or import statements.
-- Call tools one at a time only.
-- After ALL 8 steps are complete, provide a brief summary.
+Rules:
+- Call all 8 tools. Do not skip any.
+- Pass results from earlier tools as JSON strings to later tools.
+- Never write code. Never stop before tool 8 is called.
 """
 
 billing_agent = Agent(
@@ -84,11 +78,6 @@ billing_agent = Agent(
 # ---------------------------------------------------------------------------
 
 async def run_billing_agent(days_back: int = 30, report_month: Optional[str] = None):
-    """
-    Main entry point - run the billing agent for the given period.
-    days_back: number of days to look back (default 30)
-    report_month: optional YYYY-MM string to target a specific month
-    """
     session_service = InMemorySessionService()
     runner = Runner(
         agent=billing_agent,
@@ -105,35 +94,17 @@ async def run_billing_agent(days_back: int = 30, report_month: Optional[str] = N
     period_str = report_month if report_month else f"last {days_back} days"
 
     prompt = f"""
-    Run a full GCP billing analysis for the {period_str}.
+    Run GCP billing analysis for {period_str} using days_back={days_back}.
 
-    You MUST complete ALL 8 steps below in order. Do not stop early.
-
-    STEP 1: Call fetch_org_billing_summary with days_back={days_back}
-    STEP 2: Call fetch_project_billing_detail with days_back={days_back}
-    STEP 3: Call fetch_service_cost_breakdown with days_back={days_back}
-    STEP 4: Call detect_billing_anomalies with threshold_pct=20, days_back={days_back}
-    STEP 5: Call fetch_top_cost_drivers with days_back={days_back}, top_n=10
-    STEP 6: Call generate_excel_report with:
-            - filename="billing_report_{today}.xlsx"
-            - org_summary=<JSON string from step 1>
-            - project_detail=<JSON string from step 2>
-            - service_breakdown=<JSON string from step 3>
-            - anomalies=<JSON string from step 4>
-            - top_drivers=<JSON string from step 5>
-    STEP 7: Call generate_csv_report with:
-            - filename="billing_report_{today}.csv"
-            - org_summary=<JSON string from step 1>
-            - anomalies=<JSON string from step 4>
-            - top_drivers=<JSON string from step 5>
-    STEP 8: Call send_slack_report with:
-            - org_summary=<JSON string from step 1>
-            - anomaly_summary=<JSON string from step 4>
-            - top_drivers=<JSON string from step 5>
-            - excel_filepath=<filepath from step 6>
-            - csv_filepath=<filepath from step 7>
-
-    All 8 steps are MANDATORY. Complete every step before finishing.
+    Call all 8 tools in order:
+    1. fetch_org_billing_summary(days_back={days_back})
+    2. fetch_project_billing_detail(days_back={days_back})
+    3. fetch_service_cost_breakdown(days_back={days_back})
+    4. detect_billing_anomalies(days_back={days_back}, threshold_pct=20)
+    5. fetch_top_cost_drivers(days_back={days_back}, top_n=10)
+    6. generate_excel_report(filename="billing_report_{today}.xlsx", pass all results as JSON strings)
+    7. generate_csv_report(filename="billing_report_{today}.csv", pass results as JSON strings)
+    8. send_slack_report(pass all JSON strings and filepaths from steps 6 and 7)
     """
 
     content = genai_types.Content(
@@ -148,32 +119,16 @@ async def run_billing_agent(days_back: int = 30, report_month: Optional[str] = N
         session_id=session.id,
         new_message=content,
     ):
-        # Log agent text responses
         if hasattr(event, "content") and event.content:
             for part in event.content.parts:
                 if hasattr(part, "text") and part.text:
                     print(f"Agent: {part.text}")
-
-        # Log tool calls
-        if hasattr(event, "tool_calls") and event.tool_calls:
-            for tc in event.tool_calls:
-                print(f"[TOOL CALL] {tc.name} → args: {tc.args}")
-
-        # Log tool results
-        if hasattr(event, "tool_results") and event.tool_results:
-            for tr in event.tool_results:
-                result_str = str(tr.result)[:200]
-                print(f"[TOOL RESULT] {tr.name} → {result_str}...")
-
-        # Log function calls from content parts
-        if hasattr(event, "content") and event.content:
-            for part in event.content.parts:
                 if hasattr(part, "function_call") and part.function_call:
                     fc = part.function_call
-                    print(f"[FUNCTION CALL] {fc.name} → {str(fc.args)[:200]}")
+                    print(f"[FUNCTION CALL] {fc.name} → {str(fc.args)[:150]}")
                 if hasattr(part, "function_response") and part.function_response:
                     fr = part.function_response
-                    print(f"[FUNCTION RESPONSE] {fr.name} → {str(fr.response)[:200]}...")
+                    print(f"[FUNCTION RESPONSE] {fr.name} → {str(fr.response)[:150]}...")
 
     print(f"[{datetime.now().isoformat()}] Billing Agent run complete.")
 
