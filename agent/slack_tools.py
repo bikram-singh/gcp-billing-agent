@@ -14,6 +14,22 @@ SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 SLACK_CHANNEL   = os.environ.get("SLACK_CHANNEL", "#gcp-billing-alerts")
 REPORTS_DIR     = Path(os.environ.get("REPORTS_DIR", "/tmp/billing_reports"))
 
+# ── Currency symbol mapper ─────────────────────────────────────────────────
+CURRENCY_SYMBOLS = {
+    "INR": "₹",
+    "USD": "$",
+    "EUR": "€",
+    "GBP": "£",
+    "JPY": "¥",
+    "AUD": "A$",
+    "CAD": "C$",
+    "SGD": "S$",
+}
+
+
+def _currency_symbol(currency: str) -> str:
+    return CURRENCY_SYMBOLS.get(currency, currency)
+
 
 def _parse(s):
     if not s:
@@ -56,17 +72,18 @@ def send_slack_report(
     anom    = _parse(anomaly_summary)
     drivers = _parse(top_drivers)
 
-    client   = WebClient(token=SLACK_BOT_TOKEN)
-    run_ts   = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
+    client  = WebClient(token=SLACK_BOT_TOKEN)
+    run_ts  = datetime.now().strftime("%Y-%m-%d %H:%M UTC")
 
-    # ── Currency from billing data (INR, USD etc) ──────────────────────────
-    currency = org.get("currency", "INR") if org else "INR"
+    # ── Currency symbol from billing data ──────────────────────────────────
+    raw_currency = org.get("currency", "INR") if org else "INR"
+    currency     = _currency_symbol(raw_currency)
 
     critical  = anom.get("critical_count", 0) if anom else 0
     warning   = anom.get("warning_count",  0) if anom else 0
     sev_emoji = _emoji_severity(critical, warning)
 
-    total_cost = f"{currency} {org.get('total_cost', 0):,.2f}" if org else "N/A"
+    total_cost = f"{currency}{org.get('total_cost', 0):,.2f}" if org else "N/A"
     period     = (
         f"{org.get('period', {}).get('start')} → {org.get('period', {}).get('end')}"
         if org else "N/A"
@@ -82,12 +99,12 @@ def send_slack_report(
     anomaly_lines = []
     if anom and anom.get("anomalies"):
         for a in anom["anomalies"][:5]:
-            sev  = "🔴 CRITICAL" if a.get("pct_change", 0) >= 50 else "🟡 WARNING"
-            a_currency = a.get("currency", currency)
+            sev        = "🔴 CRITICAL" if a.get("pct_change", 0) >= 50 else "🟡 WARNING"
+            a_currency = _currency_symbol(a.get("currency", raw_currency))
             line = (
                 f"{sev} `{a.get('project_id')}` | {a.get('service')} | "
                 f"{a.get('usage_date')} | +{a.get('pct_change')}% "
-                f"({a_currency} {a.get('daily_cost', 0):,.2f} vs avg {a_currency} {a.get('avg_7d_cost', 0):,.2f})"
+                f"({a_currency}{a.get('daily_cost', 0):,.2f} vs avg {a_currency}{a.get('avg_7d_cost', 0):,.2f})"
             )
             anomaly_lines.append(line)
         if len(anom["anomalies"]) > 5:
@@ -99,10 +116,10 @@ def send_slack_report(
     driver_lines = []
     if drivers and drivers.get("drivers"):
         for i, d in enumerate(drivers["drivers"][:5], 1):
-            d_currency = d.get("currency", currency)
+            d_currency = _currency_symbol(d.get("currency", raw_currency))
             driver_lines.append(
                 f"{i}. `{d.get('project_name')}` | {d.get('service')} | "
-                f"*{d_currency} {d.get('total_cost', 0):,.2f}*"
+                f"*{d_currency}{d.get('total_cost', 0):,.2f}*"
             )
 
     # ── Slack blocks ───────────────────────────────────────────────────────
@@ -118,7 +135,7 @@ def send_slack_report(
         {"type": "divider"},
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*🚨 Anomaly Detection*\n" + "\n".join(anomaly_lines)},
+            "text": {"type": "mrkdwn", "text": "*🚨 Anomaly Detection*\n" + "\n".join(anomaly_lines)},
         },
     ]
 
@@ -127,7 +144,7 @@ def send_slack_report(
             {"type": "divider"},
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*💸 Top 5 Cost Drivers*\n" + "\n".join(driver_lines)},
+                "text": {"type": "mrkdwn", "text": "*💸 Top 5 Cost Drivers*\n" + "\n".join(driver_lines)},
             },
         ]
 
