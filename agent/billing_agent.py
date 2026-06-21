@@ -4,9 +4,8 @@ Fetches billing reports, detects anomalies, sends Slack reports with Excel/CSV a
 """
 
 import os
-import json
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 # CRITICAL: Set Vertex AI mode BEFORE any ADK imports (same pattern as CloudSentinel)
@@ -118,15 +117,38 @@ async def run_billing_agent(days_back: int = 30, report_month: Optional[str] = N
     )
 
     print(f"[{datetime.now().isoformat()}] Starting GCP Billing Agent run...")
+
     async for event in runner.run_async(
         user_id="github-actions",
         session_id=session.id,
         new_message=content,
     ):
+        # Log agent text responses
         if hasattr(event, "content") and event.content:
             for part in event.content.parts:
                 if hasattr(part, "text") and part.text:
                     print(f"Agent: {part.text}")
+
+        # Log tool calls
+        if hasattr(event, "tool_calls") and event.tool_calls:
+            for tc in event.tool_calls:
+                print(f"[TOOL CALL] {tc.name} → args: {tc.args}")
+
+        # Log tool results
+        if hasattr(event, "tool_results") and event.tool_results:
+            for tr in event.tool_results:
+                result_str = str(tr.result)[:200]
+                print(f"[TOOL RESULT] {tr.name} → {result_str}...")
+
+        # Log function calls from content parts
+        if hasattr(event, "content") and event.content:
+            for part in event.content.parts:
+                if hasattr(part, "function_call") and part.function_call:
+                    fc = part.function_call
+                    print(f"[FUNCTION CALL] {fc.name} → {str(fc.args)[:200]}")
+                if hasattr(part, "function_response") and part.function_response:
+                    fr = part.function_response
+                    print(f"[FUNCTION RESPONSE] {fr.name} → {str(fr.response)[:200]}...")
 
     print(f"[{datetime.now().isoformat()}] Billing Agent run complete.")
 
