@@ -4,7 +4,8 @@ Queries the GCP Billing Export table in BigQuery
 """
 
 import os
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, date
 from typing import Any, Optional
 from google.cloud import bigquery
 
@@ -25,7 +26,7 @@ def _bq() -> bigquery.Client:
     if _client is None:
         _client = bigquery.Client(
             project=BQ_PROJECT,
-            location=BQ_LOCATION,   # Billing export is always in US multi-region
+            location=BQ_LOCATION,
         )
     return _client
 
@@ -34,6 +35,26 @@ def _date_range(days_back: int) -> tuple:
     end   = datetime.utcnow().date()
     start = end - timedelta(days=days_back)
     return str(start), str(end)
+
+
+def _serialize(obj):
+    """Convert BigQuery row to JSON-serializable dict."""
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_serialize(i) for i in obj]
+    elif isinstance(obj, (date, datetime)):
+        return str(obj)
+    elif hasattr(obj, '__float__'):
+        return float(obj)
+    elif hasattr(obj, '__int__'):
+        return int(obj)
+    return obj
+
+
+def _rows_to_dicts(rows) -> list:
+    """Convert BigQuery rows to JSON-serializable list of dicts."""
+    return [_serialize(dict(r)) for r in rows]
 
 
 # ---------------------------------------------------------------------------
@@ -66,26 +87,22 @@ def fetch_org_billing_summary(days_back: int = 30) -> dict:
     ORDER BY total_cost DESC
     """
     try:
-        rows = list(_bq().query(query).result())
-        projects = [dict(r) for r in rows]
-        total    = round(sum(p["total_cost"] for p in projects), 2)
-        currency = projects[0]["currency"] if projects else "USD"
+        rows     = _rows_to_dicts(_bq().query(query).result())
+        total    = round(sum(p.get("total_cost", 0) or 0 for p in rows), 2)
+        currency = rows[0]["currency"] if rows else "INR"
     except Exception as e:
         return {
-            "total_cost":    0,
-            "currency":      "USD",
-            "period":        {"start": start, "end": end},
-            "projects":      [],
-            "project_count": 0,
-            "error":         str(e),
+            "total_cost": 0, "currency": "INR",
+            "period": {"start": start, "end": end},
+            "projects": [], "project_count": 0, "error": str(e),
         }
 
     return {
         "total_cost":    total,
         "currency":      currency,
         "period":        {"start": start, "end": end},
-        "projects":      projects,
-        "project_count": len(projects),
+        "projects":      rows,
+        "project_count": len(rows),
     }
 
 
@@ -124,7 +141,7 @@ def fetch_project_billing_detail(
     ORDER BY usage_date DESC, daily_cost DESC
     """
     try:
-        rows = [dict(r) for r in _bq().query(query).result()]
+        rows = _rows_to_dicts(_bq().query(query).result())
     except Exception as e:
         return {"rows": [], "record_count": 0, "period": {"start": start, "end": end}, "error": str(e)}
     return {"rows": rows, "record_count": len(rows), "period": {"start": start, "end": end}}
@@ -158,7 +175,7 @@ def fetch_service_cost_breakdown(days_back: int = 30) -> dict:
     ORDER BY total_cost DESC
     """
     try:
-        rows = [dict(r) for r in _bq().query(query).result()]
+        rows = _rows_to_dicts(_bq().query(query).result())
     except Exception as e:
         return {"services": [], "period": {"start": start, "end": end}, "error": str(e)}
     return {"services": rows, "period": {"start": start, "end": end}}
@@ -228,21 +245,17 @@ def detect_billing_anomalies(
     LIMIT 50
     """
     try:
-        rows = [dict(r) for r in _bq().query(query).result()]
+        rows = _rows_to_dicts(_bq().query(query).result())
     except Exception as e:
         return {
-            "anomalies":      [],
-            "anomaly_count":  0,
-            "critical_count": 0,
-            "warning_count":  0,
-            "threshold_pct":  threshold_pct,
-            "period":         {"start": start, "end": end},
-            "summary":        "Anomaly detection failed",
-            "error":          str(e),
+            "anomalies": [], "anomaly_count": 0, "critical_count": 0,
+            "warning_count": 0, "threshold_pct": threshold_pct,
+            "period": {"start": start, "end": end},
+            "summary": "Anomaly detection failed", "error": str(e),
         }
 
-    critical = [r for r in rows if r.get("pct_change", 0) >= 50]
-    warning  = [r for r in rows if 20 <= r.get("pct_change", 0) < 50]
+    critical = [r for r in rows if (r.get("pct_change") or 0) >= 50]
+    warning  = [r for r in rows if 20 <= (r.get("pct_change") or 0) < 50]
 
     return {
         "anomalies":      rows,
@@ -251,10 +264,7 @@ def detect_billing_anomalies(
         "warning_count":  len(warning),
         "threshold_pct":  threshold_pct,
         "period":         {"start": start, "end": end},
-        "summary":        (
-            f"{len(rows)} anomalies detected "
-            f"({len(critical)} critical, {len(warning)} warning)"
-        ),
+        "summary":        f"{len(rows)} anomalies detected ({len(critical)} critical, {len(warning)} warning)",
     }
 
 
@@ -292,7 +302,7 @@ def fetch_top_cost_drivers(
     LIMIT {top_n}
     """
     try:
-        rows = [dict(r) for r in _bq().query(query).result()]
+        rows = _rows_to_dicts(_bq().query(query).result())
     except Exception as e:
         return {"drivers": [], "top_n": top_n, "period": {"start": start, "end": end}, "error": str(e)}
     return {"drivers": rows, "top_n": top_n, "period": {"start": start, "end": end}}
