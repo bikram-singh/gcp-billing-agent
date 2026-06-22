@@ -35,6 +35,7 @@
 - [Slack Notifications](#-slack-notifications)
 - [Scheduled Pipeline](#-scheduled-pipeline)
 - [Local Development - ADK Web UI](#-local-development---adk-web-ui)
+- [Troubleshooting](#-troubleshooting)
 - [Snapshots](#-snapshots)
 - [Repository](#-repository)
 
@@ -42,7 +43,7 @@
 
 ## 🌐 Overview
 
-The **GCP Billing Intelligence Agent** is a fully automated cost monitoring solution for GCP organizations. It uses **Google ADK** with **Vertex AI** to intelligently orchestrate billing data collection, anomaly detection, report generation, and Slack alerting - all without any stored credentials.
+The **GCP Billing Intelligence Agent** is a fully automated cost monitoring solution for GCP organizations. It uses a **hybrid approach** - Google ADK with Vertex AI for intelligent BigQuery data fetching, and direct Python calls for reliable report generation and Slack delivery.
 
 The pipeline runs automatically every day at **9:00 AM IST** via GitHub Actions - no manual trigger needed.
 
@@ -54,12 +55,12 @@ The pipeline runs automatically every day at **9:00 AM IST** via GitHub Actions 
 | 🧠 **LLM** | Gemini 2.5 Flash Lite via **Vertex AI** |
 | ☁️ **Cloud Platform** | Google Cloud Platform |
 | 🔐 **Authentication** | Workload Identity Federation (WIF) - zero JSON keys |
-| 📊 **Data Source** | BigQuery Billing Export (`gcp_billing_export_v1`) |
+| 📊 **Data Source** | BigQuery Billing Export (`gcp_billing_export_v1_*`) |
 | 📢 **Notifications** | Slack (Block Kit rich messages + file attachments) |
 | 📁 **Output Format** | Excel (.xlsx) multi-sheet + CSV |
 | 🐍 **Language** | Python 3.11+ |
-| ⏰ **Scheduled Run** | GitHub Actions · Daily at 9:00 AM IST |
-| 🔄 **CI/CD** | `billing_agent.yml` · `main.py` |
+| ⏰ **Scheduled Run** | GitHub Actions · Daily at 9:00 AM IST (3:30 AM UTC) |
+| 🔄 **Approach** | Hybrid - ADK for data fetching, Python for reports + Slack |
 
 ### ✨ What It Does
 
@@ -87,8 +88,15 @@ GitHub Actions (cron: 9:00 AM IST daily)
     (github-actions-pool / bikram-singh-provider)
               │
               ▼
-    Google ADK Agent
-    (Gemini 2.5 Flash Lite via Vertex AI)
+    ┌─────────────────────────────────┐
+    │   HYBRID PIPELINE               │
+    │                                 │
+    │  ADK Agent (Gemini 2.5 FL)      │
+    │  Steps 1-5: BigQuery Fetching   │
+    │                                 │
+    │  Python Direct Calls            │
+    │  Steps 6-8: Reports + Slack     │
+    └─────────────────────────────────┘
               │
     __________|____________________________
    |           |           |              |
@@ -98,35 +106,46 @@ Billing     Anomaly     (Excel/CSV)    (Message +
 Queries     Detection   openpyxl       File Upload)
 ```
 
+### 🔄 Why Hybrid Approach?
+
+| Approach | Steps | Reason |
+|---|---|---|
+| **ADK + LLM** | 1-5 (BigQuery) | LLM intelligently orchestrates data fetching |
+| **Python Direct** | 6-8 (Reports + Slack) | Guaranteed execution - no LLM truncation risk |
+
+> 💡 **Key Learning:** LLMs can stop early after fetching large datasets. Steps 6-8 are called directly in Python to guarantee Excel, CSV, and Slack always execute.
+
 ### 🔄 Layer Breakdown
 
 | Layer | Components |
 |---|---|
 | **Trigger Layer** | GitHub Actions Cron (9:00 AM IST) · Developer / ADK Web UI |
 | **Auth Layer** | Workload Identity Federation → OAuth token → Vertex AI + GCP APIs |
-| **AI Agent Layer** | ADK Root Agent (`billing_agent.py`) · Gemini 2.5 Flash Lite via Vertex AI |
-| **Data Layer** | BigQuery Billing Export · 5 Query Tools · Error Handling |
+| **AI Agent Layer** | ADK Agent (`billing_agent.py`) · Gemini 2.5 Flash Lite via Vertex AI |
+| **Data Layer** | BigQuery Billing Export · 5 Query Tools · Date Serialization · Error Handling |
 | **Report Layer** | Excel (5 sheets, color-coded) · CSV (flat report) |
-| **Notification Layer** | Slack Block Kit messages · Excel + CSV file attachments |
+| **Notification Layer** | Slack Block Kit messages · Currency symbols (₹/$) · Excel + CSV attachments |
 
 ### 🔄 Full Pipeline Flow
 
 ```
-Step 1  fetch_org_billing_summary      →  Total spend across all projects
-Step 2  fetch_project_billing_detail   →  Day-by-day breakdown per project
-Step 3  fetch_service_cost_breakdown   →  Costs grouped by GCP service
-Step 4  detect_billing_anomalies       →  7-day rolling avg spike detection
-Step 5  fetch_top_cost_drivers         →  Top 10 project + service + SKU
-Step 6  generate_excel_report          →  5-sheet color-coded Excel file
-Step 7  generate_csv_report            →  Flat CSV report
-Step 8  send_slack_report              →  Rich Slack message + file uploads
+Step 1  fetch_org_billing_summary      →  ADK/LLM  →  Total spend across all projects
+Step 2  fetch_project_billing_detail   →  ADK/LLM  →  Day-by-day breakdown per project
+Step 3  fetch_service_cost_breakdown   →  ADK/LLM  →  Costs grouped by GCP service
+Step 4  detect_billing_anomalies       →  ADK/LLM  →  7-day rolling avg spike detection
+Step 5  fetch_top_cost_drivers         →  ADK/LLM  →  Top 10 project + service + SKU
+Step 6  generate_excel_report          →  Python   →  5-sheet color-coded Excel file
+Step 7  generate_csv_report            →  Python   →  Flat CSV report
+Step 8  send_slack_report              →  Python   →  Rich Slack message + file uploads
 ```
 
 ---
 
 ## 🛠️ Agent Tools
 
-The agent exposes **8 tools** that Gemini (via Vertex AI) orchestrates automatically:
+The agent exposes **8 tools** across two execution modes:
+
+### BigQuery Tools (ADK/LLM orchestrated)
 
 ### 1️⃣ `fetch_org_billing_summary`
 Fetches total cost summary across ALL projects in the organization grouped by project for the last N days.
@@ -149,14 +168,16 @@ Detects cost spikes using a 7-day rolling average comparison:
 ### 5️⃣ `fetch_top_cost_drivers`
 Ranks the top N project + service + SKU combinations by total cost for the period.
 
+### Report + Notification Tools (Python direct calls)
+
 ### 6️⃣ `generate_excel_report`
-Generates a multi-sheet color-coded Excel report with all billing data.
+Generates a 5-sheet color-coded Excel report. Called directly in Python after ADK completes data fetching.
 
 ### 7️⃣ `generate_csv_report`
-Generates a flat CSV report with org summary, anomalies, and top drivers.
+Generates a flat CSV report with org summary, anomalies, and top drivers. Called directly in Python.
 
 ### 8️⃣ `send_slack_report`
-Sends a structured Slack Block Kit message and uploads Excel + CSV files as thread attachments.
+Sends a structured Slack Block Kit message with currency symbols (₹ for INR) and uploads Excel + CSV files as thread attachments. Called directly in Python.
 
 ---
 
@@ -171,10 +192,10 @@ gcp-billing-agent/
 │
 ├── 📁 agent/
 │   ├── 📄 __init__.py                  # ADK Web UI entry point (root_agent)
-│   ├── 📄 billing_agent.py             # ADK Agent definition + async runner
-│   ├── 📄 bigquery_tools.py            # 5 BigQuery tools with error handling
+│   ├── 📄 billing_agent.py             # Hybrid runner - ADK + Python direct calls
+│   ├── 📄 bigquery_tools.py            # 5 BigQuery tools with date serialization
 │   ├── 📄 report_tools.py              # Excel + CSV report generation
-│   └── 📄 slack_tools.py               # Slack Block Kit + file upload
+│   └── 📄 slack_tools.py               # Slack Block Kit + currency symbols + file upload
 │
 ├── 📁 sql/
 │   └── 📄 billing_queries.sql          # Standalone SQL for manual testing
@@ -197,7 +218,7 @@ gcp-billing-agent/
 | ☁️ **GCP Account** | With Billing Export enabled |
 | 🔐 **WIF Setup** | Workload Identity Federation configured |
 | 💬 **Slack Workspace** | With a Bot Token (`xoxb-...`) |
-| 📊 **BigQuery** | Billing Export dataset (`billing_export`) |
+| 📊 **BigQuery** | Billing Export dataset in **US multi-region** |
 
 ### 🔌 GCP APIs Required
 
@@ -230,36 +251,55 @@ gcloud services enable \
 GCP Console → Billing → Billing Export → BigQuery Export
 → Standard usage cost → Edit Settings
 → Project: your-gcp-project
-→ Dataset: billing_export
+→ Dataset: billing_export  ← type this, do NOT pre-create
+→ Data location: US (multiple regions in United States)  ← CRITICAL
 → Save
 ```
 
+> ⚠️ **Critical:** Always select **US (multiple regions)** NOT `us-central1`. Billing Export only writes to US multi-region. The agent uses `location="US"` in the BigQuery client.
+
 > ⚠️ **Important:** GCP auto-creates the dataset and table. Data takes **24-48 hours** to populate after enabling.
 
-### Step 2 - Verify Export is Active
+### Step 2 - Verify GCP System Account is Present
+
+After saving, run:
 
 ```bash
-bq ls --project_id=YOUR_PROJECT_ID
-
-# Expected output:
-#  datasetId
-#  ──────────────
-#  billing_export
+bq show --project_id=YOUR_PROJECT_ID billing_export
 ```
 
-### Step 3 - Verify Table Exists
+Confirm `billing-export-bigquery@system.gserviceaccount.com` appears as Owner:
+
+```
+Owners:
+  billing-export-bigquery@system.gserviceaccount.com  ← must be present
+  projectOwners
+```
+
+### Step 3 - Find the Actual Table Name
+
+GCP appends the billing account ID to the table name:
 
 ```bash
-bq query --use_legacy_sql=false \
-  'SELECT COUNT(*) as rows,
-          MIN(DATE(usage_start_time)) as earliest,
-          MAX(DATE(usage_start_time)) as latest
-   FROM `YOUR_PROJECT.billing_export.gcp_billing_export_v1`'
+bq ls --project_id=YOUR_PROJECT_ID billing_export
+
+# Output:
+# tableId                                    Type
+# ------------------------------------------ -----
+# gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX TABLE
 ```
 
-### Dataset Location
+> ⚠️ **Important:** Use the full table name with billing account suffix in the `BQ_BILLING_TABLE` GitHub secret.
 
-> ⚠️ **Critical:** GCP Billing Export tables are always stored in **US multi-region**, NOT `us-central1`. The agent is configured with `location="US"` to handle this correctly.
+### Step 4 - Verify Data
+
+```bash
+bq query --use_legacy_sql=false --location=US \
+"SELECT COUNT(*) as row_count,
+        MIN(DATE(usage_start_time)) as earliest,
+        MAX(DATE(usage_start_time)) as latest
+ FROM \`YOUR_PROJECT.billing_export.gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX\`"
+```
 
 ---
 
@@ -275,7 +315,7 @@ Go to repo → **Settings** → **Secrets and variables** → **Actions** → **
 | `GCP_WIF_PROVIDER_NONPROD` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL/providers/PROVIDER` |
 | `GCP_WIF_SERVICE_ACCOUNT_NONPROD` | `github-actions-deploy@PROJECT.iam.gserviceaccount.com` |
 | `BQ_BILLING_DATASET` | `billing_export` |
-| `BQ_BILLING_TABLE` | `gcp_billing_export_v1` |
+| `BQ_BILLING_TABLE` | `gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX` ← full name with suffix |
 | `GCP_ORG_ID` | `125899388883` |
 | `SLACK_BOT_TOKEN` | `xoxb-your-token` |
 | `SLACK_CHANNEL_ID` | `C0XXXXXXXXX` |
@@ -372,27 +412,40 @@ A GKE spike in one project does not mask a Cloud SQL spike in another. Each proj
 ```
 📊 GCP Organization Billing Report
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔴 GCP Billing Report | 2025-06-18 03:30 UTC
-Period: 2025-05-18 → 2025-06-18 | Total Spend: USD 12,847.33 | Projects: 8
+🔴 GCP Billing Report | 2026-06-21 12:41 UTC
+Period: 2026-05-22 → 2026-06-21 | Total Spend: ₹14,516.99 | Projects: 1
 
 🚨 Anomaly Detection
-🔴 CRITICAL dhg-vaccine-rateauto-nonpord | Cloud SQL | 2025-06-17 | +87.3%
-            ($234.12 vs avg $125.00)
-🟡 WARNING  dhg-vaccine-rateauto-dev | GKE | 2025-06-16 | +31.2%
-            ($89.40 vs avg $68.14)
+🔴 CRITICAL dhg-vaccine-rateauto-nonpord | Compute Engine | 2026-06-04 | +131101.7%
+            (₹22.53 vs avg ₹0.02)
+🔴 CRITICAL dhg-vaccine-rateauto-nonpord | Cloud Logging  | 2026-05-24 | +17054.8%
+            (₹0.53 vs avg ₹0.00)
+...and 41 more (see attached report)
 
 💸 Top 5 Cost Drivers
-1. dhg-vaccine-rateauto-nonpord | Cloud SQL for PostgreSQL | $3,241.00
-2. dhg-vaccine-rateauto-nonpord | Kubernetes Engine        | $2,887.50
-3. dhg-vaccine-rateauto-dev     | Compute Engine           | $1,203.00
-4. dhg-vaccine-rateauto-nonpord | Cloud Storage            | $892.00
-5. dhg-vaccine-rateauto-dev     | Cloud SQL                | $654.00
+1. dhg-vaccine-rateauto-nonpord | Kubernetes Engine                    | ₹3,436.01
+2. dhg-vaccine-rateauto-nonpord | Container Registry Vulnerability Scan | ₹2,532.05
+3. dhg-vaccine-rateauto-nonpord | Kubernetes Engine                    | ₹1,655.83
+4. dhg-vaccine-rateauto-nonpord | Cloud SQL                            | ₹1,214.74
+5. dhg-vaccine-rateauto-nonpord | Cloud Monitoring                     | ₹938.51
 
-🤖 Generated by GCP Billing Agent | Reports attached below
+🚨 Action Required: 33 critical anomalies need immediate review.
+
+Generated by GCP Billing Agent | Reports attached below
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📎 billing_report_20250618.xlsx   [Excel Spreadsheet]
-📎 billing_report_20250618.csv    [CSV File]
+📎 billing_report_20260621.xlsx   [Excel Spreadsheet]
+📎 billing_report_20260621.csv    [CSV File]
 ```
+
+### Currency Support
+
+| Currency | Symbol |
+|---|---|
+| INR | ₹ |
+| USD | $ |
+| EUR | € |
+| GBP | £ |
+| JPY | ¥ |
 
 ### Failure Notification
 
@@ -415,20 +468,22 @@ GitHub Actions Cron (9:00 AM IST daily)
          ↓
 main.py --days-back 30
          ↓
-ADK Agent → Vertex AI (Gemini 2.5 Flash Lite)
-         ↓
-Gemini orchestrates all 8 tools:
+HYBRID PIPELINE:
+
+Phase 1 - ADK Agent (Gemini 2.5 Flash Lite via Vertex AI):
    Step 1 → fetch_org_billing_summary
    Step 2 → fetch_project_billing_detail
    Step 3 → fetch_service_cost_breakdown
    Step 4 → detect_billing_anomalies
    Step 5 → fetch_top_cost_drivers
+
+Phase 2 - Python Direct Calls (guaranteed execution):
    Step 6 → generate_excel_report
    Step 7 → generate_csv_report
    Step 8 → send_slack_report
          ↓
 Excel + CSV artifacts saved in GitHub Actions (90 days)
-Slack report delivered to #gcp-billing-alerts
+Slack report delivered to #gcp-billing-monitor
 ```
 
 ### Schedule Configuration
@@ -465,7 +520,7 @@ $env:GOOGLE_CLOUD_PROJECT = "your-gcp-project-id"
 $env:GOOGLE_CLOUD_LOCATION = "us-central1"
 $env:GCP_PROJECT_ID = "your-gcp-project-id"
 $env:BQ_BILLING_DATASET = "billing_export"
-$env:BQ_BILLING_TABLE = "gcp_billing_export_v1"
+$env:BQ_BILLING_TABLE = "gcp_billing_export_v1_XXXXXX_XXXXXX_XXXXXX"
 $env:GCP_ORG_ID = "125899388883"
 $env:SLACK_BOT_TOKEN = "xoxb-your-token"
 $env:SLACK_CHANNEL = "C0XXXXXXXXX"
@@ -477,6 +532,8 @@ $env:REPORTS_DIR = "D:\gcp-billing-agent\reports"
 ```bash
 gcloud auth application-default login
 ```
+
+> ⚠️ **Note:** Local ADK Web runs may show "billing data not available" if local credentials don't have BigQuery access. GitHub Actions uses WIF which has full access.
 
 ### Step 3 - Install Dependencies
 
@@ -527,15 +584,41 @@ python main.py --month 2025-05
 Model not found or project does not have access
 ```
 
-**Fix:** Ensure `GOOGLE_GENAI_USE_VERTEXAI=TRUE` is set BEFORE any ADK imports. Already handled in `main.py` and `billing_agent.py`.
+Fix: Ensure `GOOGLE_GENAI_USE_VERTEXAI=TRUE` is set BEFORE any ADK imports. Use model `gemini-2.5-flash-lite` - same as CloudSentinel VM Inventory Agent.
 
-### BigQuery Table Not Found (us-central1)
+### BigQuery Table Not Found
+
+```
+Not found: Table *** was not found in location US
+```
+
+Fix: The table name includes the billing account ID suffix. Check the actual table name:
+
+```bash
+bq ls --project_id=YOUR_PROJECT billing_export
+```
+
+Update `BQ_BILLING_TABLE` secret with the full name including suffix.
+
+### BigQuery Location Error
 
 ```
 Not found: Table *** was not found in location us-central1
 ```
 
-**Fix:** Billing Export tables are always in **US multi-region**. The agent uses `location="US"` in the BigQuery client. Already fixed in `bigquery_tools.py`.
+Fix: Billing Export tables are always in **US multi-region**. The agent uses `location="US"` in the BigQuery client. Already handled in `bigquery_tools.py`.
+
+### date Object JSON Serialization Error
+
+```
+TypeError: Object of type date is not JSON serializable
+```
+
+Fix: Already handled in `bigquery_tools.py` via `_serialize()` function that converts all `date` and `datetime` objects to strings.
+
+### ADK Stops After Step 5
+
+The LLM may stop after fetching BigQuery data without calling report/Slack tools. Fix: The hybrid approach calls steps 6-8 directly in Python - not via LLM. Already implemented in `billing_agent.py`.
 
 ### WIF Permission Denied
 
@@ -555,15 +638,18 @@ Ensure the bot is invited to the channel:
 /invite @GCP Billing Bot
 ```
 
-And `files:write` scope is added to the Slack App.
+And `files:write` scope is added to the Slack App under OAuth & Permissions.
 
-### No Billing Data Yet
+### billing_export Dataset Has Wrong Location
 
-Billing Export takes **24-48 hours** to populate after enabling. Verify:
+If `bq show billing_export` does NOT show `billing-export-bigquery@system.gserviceaccount.com` as Owner:
 
 ```bash
-bq query --use_legacy_sql=false \
-  'SELECT COUNT(*) FROM `YOUR_PROJECT.billing_export.gcp_billing_export_v1`'
+# Delete wrong dataset
+bq rm -r -f --dataset YOUR_PROJECT:billing_export
+
+# Re-enable billing export in GCP Console with US multi-region
+# GCP will recreate it correctly
 ```
 
 ---
@@ -575,7 +661,7 @@ bq query --use_legacy_sql=false \
 
 ---
 
-### 2️⃣ Full Pipeline Execution - All 8 Tools Chained
+### 2️⃣ Full Pipeline Execution - All 8 Tools
 ![Full Pipeline](docs/snapshots/2_full_pipeline_execution.png)
 
 ---
