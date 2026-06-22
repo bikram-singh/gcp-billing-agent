@@ -576,84 +576,6 @@ python main.py --month 2025-05
 
 ---
 
-## 🔧 Troubleshooting
-
-### Vertex AI 404 NOT_FOUND
-
-```
-Model not found or project does not have access
-```
-
-Fix: Ensure `GOOGLE_GENAI_USE_VERTEXAI=TRUE` is set BEFORE any ADK imports. Use model `gemini-2.5-flash-lite` - same as CloudSentinel VM Inventory Agent.
-
-### BigQuery Table Not Found
-
-```
-Not found: Table *** was not found in location US
-```
-
-Fix: The table name includes the billing account ID suffix. Check the actual table name:
-
-```bash
-bq ls --project_id=YOUR_PROJECT billing_export
-```
-
-Update `BQ_BILLING_TABLE` secret with the full name including suffix.
-
-### BigQuery Location Error
-
-```
-Not found: Table *** was not found in location us-central1
-```
-
-Fix: Billing Export tables are always in **US multi-region**. The agent uses `location="US"` in the BigQuery client. Already handled in `bigquery_tools.py`.
-
-### date Object JSON Serialization Error
-
-```
-TypeError: Object of type date is not JSON serializable
-```
-
-Fix: Already handled in `bigquery_tools.py` via `_serialize()` function that converts all `date` and `datetime` objects to strings.
-
-### ADK Stops After Step 5
-
-The LLM may stop after fetching BigQuery data without calling report/Slack tools. Fix: The hybrid approach calls steps 6-8 directly in Python - not via LLM. Already implemented in `billing_agent.py`.
-
-### WIF Permission Denied
-
-New repo needs SA impersonation binding:
-
-```bash
-gcloud iam service-accounts add-iam-policy-binding $SA \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="principalSet://iam.googleapis.com/projects/$POOL_NUMBER/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/bikram-singh/gcp-billing-agent"
-```
-
-### Slack File Upload Fails
-
-Ensure the bot is invited to the channel:
-
-```
-/invite @GCP Billing Bot
-```
-
-And `files:write` scope is added to the Slack App under OAuth & Permissions.
-
-### billing_export Dataset Has Wrong Location
-
-If `bq show billing_export` does NOT show `billing-export-bigquery@system.gserviceaccount.com` as Owner:
-
-```bash
-# Delete wrong dataset
-bq rm -r -f --dataset YOUR_PROJECT:billing_export
-
-# Re-enable billing export in GCP Console with US multi-region
-# GCP will recreate it correctly
-```
-
----
-
 ## 📸 Snapshots
 
 ### 1️⃣ ADK Web UI - Agent Running
@@ -691,7 +613,6 @@ bq rm -r -f --dataset YOUR_PROJECT:billing_export
 | Repository | Purpose |
 |---|---|
 | [`gcp-billing-agent`](https://github.com/bikram-singh/gcp-billing-agent) | GCP Billing Intelligence Agent · ADK · Vertex AI · BigQuery · Slack |
-| [`gcp-inventory-agent-vertexai`](https://github.com/bikram-singh/gcp-inventory-agent-vertexai) | GCP VM Inventory Agent · Vertex AI · WIF · GitHub Actions |
 
 ---
 
