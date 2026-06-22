@@ -1,0 +1,73 @@
+# ORGANIZATION BILLING SUMMARY
+Period Start,Period End,Total Cost,Currency,Project Count
+2026-05-23,2026-06-22,14631.07,INR,1
+
+# PROJECT BREAKDOWN
+Project ID,Project Name,Total Cost,Currency
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,14631.07,INR
+
+# BILLING ANOMALIES
+Project ID,Project Name,Service,Date,Daily Cost,7-Day Avg,% Change,Currency,Severity
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Compute Engine,2026-06-04,22.5292,0.0172,131101.7,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-24,0.5318,0.0031,17054.8,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Compute Engine,2026-06-05,311.6659,3.2339,9537.4,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Vertex AI,2026-06-17,1.7939,0.0717,2403.4,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-25,1.5232,0.1088,1299.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-26,2.6946,0.3446,682.0,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Vertex AI,2026-06-21,2.3876,0.3592,564.7,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-27,2.9219,0.6803,329.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,VM Manager,2026-06-05,12.9195,3.4452,275.0,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Artifact Registry,2026-05-30,0.0049,0.0018,177.4,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-28,2.9618,1.0977,169.8,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Compute Engine,2026-05-24,22.692,8.9163,154.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Container Registry Vulnerability Scanning,2026-05-25,344.162,147.498,133.3,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-05-25,166.8347,72.3251,130.7,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-29,3.4534,1.5208,127.1,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Artifact Registry,2026-05-26,0.0028,0.0013,124.0,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Container Registry Vulnerability Scanning,2026-05-26,540.826,245.83,120.0,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Artifact Registry,2026-05-25,0.0017,0.0008,112.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Gemini API,2026-06-05,0.6301,0.3127,101.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-05-26,181.6262,91.227,99.1,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-06-15,44.5994,22.581,97.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Compute Engine,2026-06-06,93.2646,47.7559,95.3,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-05-23,87.6783,45.9501,90.8,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Compute Engine,2026-06-02,0.0248,0.0135,83.9,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-05-24,109.7218,59.8595,83.3,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Artifact Registry,2026-05-29,0.0028,0.0016,79.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-06-16,44.6047,25.8617,72.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-05-27,181.9573,106.2935,71.2,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Monitoring,2026-05-25,51.1323,30.449,67.9,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Monitoring,2026-05-26,67.5062,40.7906,65.5,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Compute Engine,2026-06-03,0.0248,0.0153,61.6,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Container Registry Vulnerability Scanning,2026-05-29,491.66,304.8292,61.3,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,2026-05-26,385.8592,246.047,56.8,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-05-28,182.3381,117.1026,55.7,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Container Registry Vulnerability Scanning,2026-05-30,516.243,335.9677,53.7,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-30,3.0324,2.0142,50.6,INR,CRITICAL
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,2026-05-27,401.0483,281.0001,42.7,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,2026-05-25,304.8347,216.6532,40.7,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Monitoring,2026-05-27,69.6044,49.6958,40.1,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,2026-05-28,406.947,305.0097,33.4,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,2026-05-29,182.9191,138.647,31.9,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Logging,2026-05-31,3.1956,2.4456,30.7,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Monitoring,2026-05-28,70.3505,54.673,28.7,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,2026-05-24,243.6759,189.6305,28.5,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,2026-05-29,413.9244,321.9993,28.5,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud SQL,2026-05-30,93.681,73.697,27.1,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud SQL,2026-06-15,85.8132,67.9524,26.3,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud SQL,2026-06-16,85.8145,67.9512,26.3,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Monitoring,2026-05-29,71.2058,57.8085,23.2,INR,WARNING
+dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,2026-05-30,404.4174,335.1314,20.7,INR,WARNING
+
+# TOP COST DRIVERS
+Rank,Project ID,Project Name,Service,SKU,Total Cost,Currency
+1,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,Autopilot Kubernetes Clusters,3436.01,INR
+2,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Container Registry Vulnerability Scanning,Container Images Scanned,2532.05,INR
+3,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,Autopilot Pod mCPU Requests (us-central1),1655.83,INR
+4,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud SQL,Cloud SQL for PostgreSQL: Zonal - Small instance in Americas,1280.19,INR
+5,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Cloud Monitoring,Prometheus Samples Ingested,938.51,INR
+6,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,Networking Private Service Connect Consumer End Point,757.5,INR
+7,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,Cloud Load Balancer Forwarding Rule Minimum Global,746.34,INR
+8,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Kubernetes Engine,Autopilot Pod Memory Requests (us-central1),564.61,INR
+9,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Compute Engine,E2 Instance Core running in Americas,481.76,INR
+10,dhg-vaccine-rateauto-nonpord, dhg-vaccine-rateauto-nonpord,Networking,Networking Private Service Connect Partner Select End Point,343.46,INR
