@@ -485,29 +485,6 @@ Phase 2 - Python Direct Calls (guaranteed execution):
 Excel + CSV artifacts saved in GitHub Actions (90 days)
 Slack report delivered to #gcp-billing-monitor
 ```
-
-### Schedule Configuration
-
-| Setting | Value |
-|---|---|
-| **IST Time** | 9:00 AM |
-| **UTC Time** | 3:30 AM |
-| **Cron** | `30 3 * * *` |
-| **Days** | Every day |
-| **Workflow file** | `.github/workflows/billing_agent.yml` |
-
-### Retry Logic
-
-The workflow includes automatic retry with 60-second delays for Vertex AI quota recovery:
-
-```yaml
-for attempt in 1 2 3; do
-  python main.py --days-back "$DAYS_BACK" && break
-  echo "Retrying in 60 seconds..."
-  sleep 60
-done
-```
-
 ---
 
 ## 💻 Local Development - ADK Web UI
