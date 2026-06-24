@@ -80,6 +80,9 @@ The pipeline runs automatically every day at **9:00 AM IST** via GitHub Actions 
 
 ## 🏛️ Architecture
 
+<img width="1536" height="1024" alt="gcp_billing_intelligence_agent_architecture" src="https://github.com/user-attachments/assets/5c988619-5d75-4399-a24e-fd291490adbe" />
+
+
 ```
 GitHub Actions (cron: 9:00 AM IST daily)
               │
